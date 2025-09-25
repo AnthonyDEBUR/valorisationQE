@@ -1,14 +1,27 @@
 Package: valorisationQE
-Version: 0.0.0.9000
 Title: Package Pour Valoriser Données QE
-Description: Ce package sert à valoriser graphiquement des données qualité d'eau.
-Authors@R: person(given = "Anthony",
-       family = "DE BURGHRAVE",
-       role = c("aut", "cre"),
-       email = "anthony.deburghrave@eaux-et-vilaine.bzh")
+Version: 0.0.0.9000
+Authors@R: 
+    person("Anthony", "DE BURGHRAVE", , "anthony.deburghrave@eaux-et-vilaine.bzh", role = c("aut", "cre"))
+Description: Ce package sert à valoriser graphiquement des données qualité
+    d'eau.
 License: MIT + file LICENSE
+URL: https://github.com/AnthonyDEBUR/valorisationQE
+BugReports: https://github.com/AnthonyDEBUR/valorisationQE/issues
+Imports: 
+    ggplot2,
+    magrittr,
+    meteo4Vilaine
+Suggests: 
+    DBI,
+    knitr,
+    rmarkdown,
+    RPostgres,
+    sf,
+    yaml
+VignetteBuilder: 
+    knitr
+Config/fusen/version: 0.7.1
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-URL: https://github.com/AnthonyDEBUR/valorisationQE
-BugReports: https://github.com/AnthonyDEBUR/valorisationQE/issues
