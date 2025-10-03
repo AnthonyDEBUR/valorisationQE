@@ -14,6 +14,8 @@
 #' @param shp_territoire : objet sf pour lequel on veut les informations de 
 #' pluviométrie
 #' @param dateprel : date du dernier jour du graphique
+#' @param nb_jours : nombre de jours au total pour lesquels on affiche les 
+#' précipitations
 #' @param con : connexion vers la base de données météo
 #'
 #' @return
@@ -25,6 +27,8 @@
 #' if (interactive()) {
 #'   config_path <- "C://workspace//gwilenalim//yaml//config.yml"
 #'   if (file.exists(config_path)) {
+#'     library(RPostgres)
+#'     library(meteo4Vilaine)
 #'     config <- yaml::read_yaml(config_path)
 #'     con <- tryCatch({
 #'       DBI::dbConnect(
@@ -37,7 +41,10 @@
 #'       )
 #'     }, error = function(e) NULL)
 #'     
+#'     
+#'     
 #'     if (!is.null(con)) {
+#'       
 #'       triangle_sf <- sf::st_sf(
 #'         geometry = sf::st_sfc(
 #'           sf::st_polygon(list(rbind(
@@ -50,8 +57,9 @@
 #'         crs = 4326
 #'       )
 #'       
-#'       f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-10"), con)
+#'       g<-f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-11"), con)
 #'       DBI::dbDisconnect(con)
+#'       print(g)
 #'     } else {
 #'       message("Connexion à la base impossible, exemple non exécuté.")
 #'     }
@@ -60,15 +68,17 @@
 #'   }
 #' }
 #'
+#' knitr::include_graphics(system.file("extdata", "graph_pluvio.png", package = "valorisationQE"))
 #'
 #'
 f_graph_pluviometrie<-function(shp_territoire,
                                dateprel, 
+                               nb_jours=5,
                                con)
 {
   pluie <- meteo4Vilaine::precipitations_par_zone(
     sf_objet=shp_territoire,
-    date_debut=dateprel-4,
+    date_debut=dateprel-nb_jours+1,
     date_fin=dateprel,
     con
   )
@@ -76,6 +86,9 @@ f_graph_pluviometrie<-function(shp_territoire,
   pluie$fill_color<-ifelse(pluie$source=="donnée interpolée", 
                            "interpolation", 
                            "Météo France")
+  station<-ifelse(nrow(pluie[pluie$source!="donnée interpolée",])>0,
+                  pluie[pluie$source!="donnée interpolée",]$source[1],
+                  "Météo France")
   
   g<-ggplot2::ggplot(pluie,
          ggplot2::aes(date,
@@ -86,7 +99,10 @@ f_graph_pluviometrie<-function(shp_territoire,
     ggplot2::scale_fill_manual(
       name="Station météo",
       values = c("interpolation"="white",
-                 "Météo France"="blue")) +
+                 "Météo France"="blue"),
+      labels = c("interpolation"="interpolation", 
+                 "Météo France" = station)
+      ) +
     ggplot2::scale_x_date(date_labels="%d/%m/%Y") +
     ggplot2::labs(x="",
          y="mm/jour",

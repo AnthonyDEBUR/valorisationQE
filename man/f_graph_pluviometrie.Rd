@@ -4,13 +4,16 @@
 \alias{f_graph_pluviometrie}
 \title{f_graph_pluviometrie}
 \usage{
-f_graph_pluviometrie(shp_territoire, dateprel, con)
+f_graph_pluviometrie(shp_territoire, dateprel, nb_jours = 5, con)
 }
 \arguments{
 \item{shp_territoire}{: objet sf pour lequel on veut les informations de
 pluviométrie}
 
 \item{dateprel}{: date du dernier jour du graphique}
+
+\item{nb_jours}{: nombre de jours au total pour lesquels on affiche les
+précipitations}
 
 \item{con}{: connexion vers la base de données météo}
 }
@@ -33,6 +36,8 @@ alors les précipitations sont estimées par krigeage.
 if (interactive()) {
   config_path <- "C://workspace//gwilenalim//yaml//config.yml"
   if (file.exists(config_path)) {
+    library(RPostgres)
+    library(meteo4Vilaine)
     config <- yaml::read_yaml(config_path)
     con <- tryCatch({
       DBI::dbConnect(
@@ -45,7 +50,10 @@ if (interactive()) {
       )
     }, error = function(e) NULL)
     
+    
+    
     if (!is.null(con)) {
+      
       triangle_sf <- sf::st_sf(
         geometry = sf::st_sfc(
           sf::st_polygon(list(rbind(
@@ -58,8 +66,9 @@ if (interactive()) {
         crs = 4326
       )
       
-      f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-10"), con)
+      g<-f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-11"), con)
       DBI::dbDisconnect(con)
+      print(g)
     } else {
       message("Connexion à la base impossible, exemple non exécuté.")
     }
@@ -68,6 +77,7 @@ if (interactive()) {
   }
 }
 
+knitr::include_graphics(system.file("extdata", "graph_pluvio.png", package = "valorisationQE"))
 
 
 }

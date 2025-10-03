@@ -9,15 +9,26 @@ License: MIT + file LICENSE
 URL: https://github.com/AnthonyDEBUR/valorisationQE
 BugReports: https://github.com/AnthonyDEBUR/valorisationQE/issues
 Imports: 
+    dplyr,
     ggplot2,
+    ggrepel,
+    ggspatial,
+    grid,
+    gridExtra,
     magrittr,
-    meteo4Vilaine
+    maptiles,
+    meteo4Vilaine,
+    raster,
+    readr,
+    sf,
+    stringr,
+    tidyr
 Suggests: 
     DBI,
     knitr,
     rmarkdown,
     RPostgres,
-    sf,
+    testthat,
     yaml
 VignetteBuilder: 
     knitr

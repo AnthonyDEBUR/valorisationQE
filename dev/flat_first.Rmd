@@ -35,6 +35,8 @@ Ces graphiques affichent la pluviométrie entre 2 dates sous forme d'histogramme
 #' @param shp_territoire : objet sf pour lequel on veut les informations de 
 #' pluviométrie
 #' @param dateprel : date du dernier jour du graphique
+#' @param nb_jours : nombre de jours au total pour lesquels on affiche les 
+#' précipitations
 #' @param con : connexion vers la base de données météo
 #'
 #' @return
@@ -44,11 +46,12 @@ Ces graphiques affichent la pluviométrie entre 2 dates sous forme d'histogramme
 #' @examples
 f_graph_pluviometrie<-function(shp_territoire,
                                dateprel, 
+                               nb_jours=5,
                                con)
 {
   pluie <- meteo4Vilaine::precipitations_par_zone(
     sf_objet=shp_territoire,
-    date_debut=dateprel-4,
+    date_debut=dateprel-nb_jours+1,
     date_fin=dateprel,
     con
   )
@@ -56,6 +59,9 @@ f_graph_pluviometrie<-function(shp_territoire,
   pluie$fill_color<-ifelse(pluie$source=="donnée interpolée", 
                            "interpolation", 
                            "Météo France")
+  station<-ifelse(nrow(pluie[pluie$source!="donnée interpolée",])>0,
+                  pluie[pluie$source!="donnée interpolée",]$source[1],
+                  "Météo France")
   
   g<-ggplot2::ggplot(pluie,
          ggplot2::aes(date,
@@ -66,7 +72,10 @@ f_graph_pluviometrie<-function(shp_territoire,
     ggplot2::scale_fill_manual(
       name="Station météo",
       values = c("interpolation"="white",
-                 "Météo France"="blue")) +
+                 "Météo France"="blue"),
+      labels = c("interpolation"="interpolation", 
+                 "Météo France" = station)
+      ) +
     ggplot2::scale_x_date(date_labels="%d/%m/%Y") +
     ggplot2::labs(x="",
          y="mm/jour",
@@ -86,6 +95,8 @@ f_graph_pluviometrie<-function(shp_territoire,
 if (interactive()) {
   config_path <- "C://workspace//gwilenalim//yaml//config.yml"
   if (file.exists(config_path)) {
+    library(RPostgres)
+    library(meteo4Vilaine)
     config <- yaml::read_yaml(config_path)
     con <- tryCatch({
       DBI::dbConnect(
@@ -98,7 +109,10 @@ if (interactive()) {
       )
     }, error = function(e) NULL)
     
+    
+    
     if (!is.null(con)) {
+      
       triangle_sf <- sf::st_sf(
         geometry = sf::st_sfc(
           sf::st_polygon(list(rbind(
@@ -111,8 +125,9 @@ if (interactive()) {
         crs = 4326
       )
       
-      f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-10"), con)
+      g<-f_graph_pluviometrie(triangle_sf, date = as.Date("2025-09-11"), con)
       DBI::dbDisconnect(con)
+      print(g)
     } else {
       message("Connexion à la base impossible, exemple non exécuté.")
     }
@@ -121,9 +136,1385 @@ if (interactive()) {
   }
 }
 
+knitr::include_graphics(system.file("extdata", "graph_pluvio.png", package = "valorisationQE"))
 
 
 ```
+
+# f_fond_de_carte
+    
+
+  
+```{r function-f_fond_de_carte}
+#' f_fond_de_carte
+#' 
+#' Fonction pour charger un fon de carte openstreetmap correspondant à l'emprise
+#' d'un objet sf
+#' 
+#' @param shp = objet sf
+#' @param zoom = niveau de zoom openstreetmap (paramètre facultatif)
+#' 
+#' @return
+#' un ggplot avec le fond de carte openstreetmap correspondant à l'emprise de
+#' l'objet en entrée
+#' 
+#' @export
+f_fond_de_carte <- function(shp, zoom = NULL) {
+  bbox <- sf::st_bbox(sf::st_transform(shp, 4326))
+  
+  # Charger le fond de carte OpenStreetMap avec maptiles
+  if (is.null(zoom)) {
+    sa_map <- maptiles::get_tiles(bbox, provider = "OpenStreetMap")
+  } else {
+    sa_map <- maptiles::get_tiles(bbox, zoom = zoom, provider = "OpenStreetMap")
+  }
+  
+  # Recadrer le raster à l'emprise de shp
+  sa_map_cropped <- raster::crop(sa_map, 
+                                 raster::extent(bbox["xmin"], 
+                                                bbox["xmax"], 
+                                                bbox["ymin"], 
+                                                bbox["ymax"]))
+  
+  # Convertir le raster en objet ggplot
+  sa_map2_plt <- ggplot2::ggplot() +
+    ggspatial::layer_spatial(sa_map_cropped) +
+    ggplot2::coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]), 
+                      ylim = c(bbox["ymin"], bbox["ymax"]), 
+                      expand = FALSE)
+  
+  shp <- sf::st_transform(shp, 4326)
+  
+  sa_map2_plt <- sa_map2_plt +
+    ggplot2::geom_sf(data = shp, 
+            fill = "transparent", 
+            color = "black", 
+            size = 1, 
+            inherit.aes = FALSE)+
+     theme_minimal() +
+    theme(axis.text = element_blank(), # masque les valeurs des axes
+          axis.ticks = element_blank(), # masque les ticks
+          axis.title = element_blank()) # masque les titres des axes
+  
+  return(sa_map2_plt)
+}
+
+```
+  
+```{r example-f_fond_de_carte}
+
+   triangle_sf <- sf::st_sf(
+        geometry = sf::st_sfc(
+          sf::st_polygon(list(rbind(
+            c(-1.6794, 48.1147),  # Rennes
+            c(-1.2100, 48.1230),  # Vitré
+            c(-1.5025, 47.6833),  # Derval
+            c(-1.6794, 48.1147)   # Retour à Rennes
+          )))
+        ),
+        crs = 4326
+      )
+
+f_fond_de_carte(triangle_sf, zoom=9)
+```
+  
+```{r tests-f_fond_de_carte}
+test_that("f_fond_de_carte works", {
+  expect_true(inherits(f_fond_de_carte, "function")) 
+})
+```
+  
+
+# f_cartographie_concentrations
+    
+```{r development-f_cartographie_concentrations}
+# You can prepare the code of the f_cartographie_concentrations() function here
+```
+  
+```{r function-f_cartographie_concentrations}
+#' f_cartographie_concentrations
+#' 
+#' Génère une carte des concentrations en polluants
+#'
+#' Cette fonction permet de représenter spatialement les concentrations en 
+#' polluants mesurées lors d'une campagne de prélèvements, en utilisant une 
+#' carte de fond et des données géolocalisées. Les concentrations sont classées 
+#' selon des seuils définis et affichées avec une légende personnalisée.
+#'
+#' @param fond_carte Objet `ggplot` représentant la carte de fond, par exemple 
+#' généré avec la fonction f_fond_de_carte 
+#' @param shp_staq Objet sf contenant les points de suivis à afficher. Seuls les
+#' points dont le code SANDRE est présent dans data_carte seront affichés.
+#' @param data_carte Data frame contenant les données de prélèvement, incluant 
+#' les colonnes de date de prélèvement, de code SANDRE des stations et la 
+#' colonne de valeurs à cartographier.
+#' @param col_stations Nom de la colonne contenant les codes sandre des stations 
+#' de mesure à afficher (par défaut `"CdStationMesureEauxSurface"`). Si ce nom
+#' de colonne est différent pour shp_staq et data_carte alors col_station 
+#' est un vecteur dont la première valeur est le nom de la colonne de shp_staq 
+#' et la deuxième celle de data_carte
+#' @param col_valeurs Nom de la colonne contenant les valeurs de concentration à
+#' utiliser (par défaut `"Somme"`).
+#' @param titre Titre principal de la carte (par défaut `"Bilan des concentrations en pesticides"`).
+#' @param sous_titre Sous-titre de la carte.
+#' @param breaks Vecteur numérique définissant les seuils de classes de 
+#' concentration (par défaut `c(0, 0.5, 2, Inf)`).
+#' @param values Vecteur de couleurs correspondant aux classes de concentration 
+#' (par défaut `c("cyan", "yellow", "red", "black")`).
+#' @param pts_size Taille des points représentant les stations (par défaut `6`).
+#' @param text_size Taille du texte des étiquettes (par défaut `5`).
+#' @param unite Unité des concentrations affichée dans la légende et les 
+#' étiquettes (par défaut `"µg/L"`).
+#' @param nom_legende Titre de la légende des couleurs (par 
+#' défaut `"Concentrations"`).
+#' @param nb_decimal_text Nombre de décimales à afficher dans les étiquettes 
+#' (par défaut `1`).
+#' @param label.size taille de l'étiquette (défaut = 0.25). Voir geom_text_repel
+#' du package ggrepel 
+#' (par défaut `1`).
+#' @param box.padding Marge autour de l'étiquette (par défaut 0.35) Voir 
+#' geom_text_repel du package ggrepel 
+#' @param point.padding Marge autour de l'étiquette (par défaut 0.3) Voir 
+#' geom_text_repel du package ggrepel
+#' @param segment.color Couleur du segment liant les points à leurs étiquettes. 
+#' grey50 par défaut. Voir geom_text_repel du package ggrepel 
+#' @param min.segment.length Longueur mini entre un point et son étiquette 
+#' (par défaut 0) Voir geom_text_repel du package ggrepel 
+#' 
+#' 
+#' @return Un objet `ggplot` représentant la carte des concentrations avec 
+#' légende, points colorés selon les classes, et étiquettes.
+#'
+#' @import ggplot2
+#' @import sf
+#' @import dplyr
+#' @import ggrepel
+#'
+#' @export
+f_cartographie_concentrations <-function(fond_carte,
+                                         shp_staq,
+                         data_carte,
+                         col_stations="CdStationMesureEauxSurface",
+                         col_valeurs="Somme",
+                         titre="Bilan des concentrations en pesticides",
+                         sous_titre="Date de la campagne",
+                         breaks=c(0, 0.5, 2, Inf),
+                         values = c("cyan", "yellow", "red", "black"),
+                         pts_size=6,
+                         text_size=5,
+                         unite="µg/L",
+                         nom_legende="Concentrations",
+                         nb_decimal_text=1,
+                         label.size=0.25,
+                         box.padding = 0.35,
+                     point.padding = 0.3,
+                     segment.color = "grey50",
+                     min.segment.length = 0
+){
+
+# Vérification des types d'objets
+if (!inherits(fond_carte, "gg")) {
+  stop("Erreur : 'fond_carte' doit être un objet ggplot, par exemple généré avec la fonction f_fond_de_carte.")
+}
+
+if (!inherits(shp_staq, "sf")) {
+  stop("Erreur : 'shp_staq' doit être un objet sf contenant les points de suivi.")
+}
+
+if (!is.data.frame(data_carte)) {
+  stop("Erreur : 'data_carte' doit être un data.frame contenant les données de prélèvement.")
+}
+
+# Vérification des noms de colonnes
+
+if (!is.character(col_stations) || !(length(col_stations) %in% c(1, 2))) {
+  stop("Erreur : 'col_stations' doit être une chaîne ou un vecteur de deux chaînes : nom de la colonne dans 'shp_staq' et dans 'data_carte'.")
+}
+
+if (length(col_stations) == 1) {
+  col_stations_shp <- col_stations
+  col_stations_data <- col_stations
+} else {
+  col_stations_shp <- col_stations[1]
+  col_stations_data <- col_stations[2]
+}
+
+if (!col_stations_data %in% colnames(data_carte)) {
+  stop(paste0("Erreur : La colonne '", col_stations_data, "' est absente de 'data_carte'."))
+}
+
+if (!col_stations_shp %in% colnames(shp_staq)) {
+  stop(paste0("Erreur : La colonne '", col_stations_shp, "' est absente de 'shp_staq'."))
+}
+
+if (!col_valeurs %in% colnames(data_carte)) {
+  stop(paste0("Erreur : La colonne '", col_valeurs, "' est absente de 'data_carte'."))
+}
+
+# Vérification de la cohérence entre breaks et values
+if (length(breaks) != length(values)) {
+  stop(paste0("Erreur : Le vecteur 'values' doit contenir ", length(breaks) - 1, " couleurs, correspondant aux ", length(breaks) - 1, " classes définies par 'breaks'."))
+}
+  
+  if (!is.numeric(breaks)) {
+  stop("'breaks' doit être un vecteur numérique.")
+}
+if (!is.character(values)) {
+  stop("'values' doit être un vecteur de chaînes de caractères représentant des couleurs.")
+}
+
+
+# Vérification des tailles
+if (!is.numeric(pts_size) || pts_size <= 0) {
+  stop("Erreur : 'pts_size' doit être un nombre numérique strictement positif.")
+}
+
+if (!is.numeric(text_size) || text_size <= 0) {
+  stop("Erreur : 'text_size' doit être un nombre numérique strictement positif.")
+}
+
+if (!is.numeric(nb_decimal_text) || nb_decimal_text < 0) {
+  stop("Erreur : 'nb_decimal_text' doit être un entier positif ou nul.")
+}
+
+  if (!is.numeric(label.size) || label.size < 0) {
+  stop("'label.size' doit être un nombre positif.")
+}
+if (!is.numeric(box.padding) || box.padding < 0) {
+  stop("'box.padding' doit être un nombre positif.")
+}
+if (!is.numeric(point.padding) || point.padding < 0) {
+  stop("'point.padding' doit être un nombre positif.")
+}
+if (!is.numeric(min.segment.length) || min.segment.length < 0) {
+  stop("'min.segment.length' doit être un nombre positif ou nul.")
+}
+
+  if (!is.character(segment.color) || length(segment.color) != 1) {
+  stop("'segment.color' doit être une chaîne de caractères représentant une couleur.")
+}
+
+  
+  
+   shp_staq$CdStationMesureEauxSurface<-shp_staq[[col_stations_shp]]
+  data_carte$CdStationMesureEauxSurface<-data_carte[[col_stations_data]]
+  data_carte$Somme<-data_carte[[col_valeurs]]
+
+  data_carte<-right_join(shp_staq, data_carte, by=c("CdStationMesureEauxSurface"))
+  # on définit les classes de concentration.
+  # data_carte$classe_somme_pesticides<-cut(data_carte$Somme, breaks = breaks)
+
+  data_carte_legend<-data_carte%>%st_drop_geometry()
+  data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
+  data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
+
+  # Créer les étiquettes
+  labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], unite)
+  labels[length(labels)] <- paste0(">", breaks[length(breaks) - 1], unite)
+
+  # Créer les niveaux de facteur correspondants
+  data_carte$classe_somme_pesticides <- cut(data_carte$Somme, breaks = breaks, include.lowest = TRUE)
+  labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], unite)
+  labels[length(labels)] <- paste0(">", breaks[length(breaks) - 1], unite)
+  levels(data_carte$classe_somme_pesticides) <- labels
+ 
+  data_carte_legend$label <- paste0(
+    data_carte_legend$CdStationMesureEauxSurface,
+    "\n",
+    round(data_carte_legend$Somme, nb_decimal_text),
+    " ",
+    unite
+  )
+  
+  
+
+  g<-fond_carte +
+    geom_sf(data = data_carte,
+            inherit.aes=FALSE,
+            aes(color=classe_somme_pesticides),
+            size=pts_size
+    ) +
+    scale_color_manual(values = values,
+                       labels = labels,
+                       drop=FALSE)+
+    geom_sf(data = data_carte,
+            inherit.aes=FALSE,
+            color="black",
+            fill=NA,
+            stroke=0.5,
+            shape=21,
+            size=pts_size
+    ) +
+        geom_label_repel(data = data_carte_legend,
+                     aes(x = X, y = Y, label = label),
+                     size = text_size,
+                     inherit.aes = FALSE,
+                     label.size = label.size,
+                     box.padding = box.padding,
+                     point.padding = point.padding,
+                     segment.color = segment.color,
+                     min.segment.length = min.segment.length)+
+      ggtitle(label=titre,
+            subtitle = sous_titre) +
+    labs(x = "", y = "", color = nom_legende) +
+    theme_minimal() +
+    theme(axis.text = element_blank(), # masque les valeurs des axes
+          axis.ticks = element_blank(), # masque les ticks
+          axis.title = element_blank()) # masque les titres des axes
+
+  return(g)}
+
+```
+  
+```{r example-f_cartographie_concentrations, fig.width=10, fig.height=10}
+
+library(sf)
+library(dplyr)
+
+# Coordonnées approximatives des centres des communes
+coords <- data.frame(
+  code = c("A", "B", "C"),
+  commune = c("Châteaugiron", "Janzé", "Thourie"),
+  lon = c(-1.499, -1.498, -1.4833),
+  lat = c(48.052, 47.960, 47.8550)
+)
+
+# Création de l'objet sf
+points_sf <- st_as_sf(coords, coords = c("lon", "lat"), crs = 4326)
+
+
+# bassin versant
+   triangle_sf <- sf::st_sf(
+        geometry = sf::st_sfc(
+          sf::st_polygon(list(rbind(
+            c(-1.6794, 48.1147),  # Rennes
+            c(-1.2100, 48.1230),  # Vitré
+            c(-1.5025, 47.6833),  # Derval
+            c(-1.6794, 48.1147)   # Retour à Rennes
+          )))
+        ),
+        crs = 4326
+      )
+
+fond_carte<-f_fond_de_carte(triangle_sf, zoom=10)
+
+# Création du data.frame
+df_valeurs <- data.frame(
+  code = c("A", "B", "C"),
+  valeur = c(0.23, 0.71, 3.52)
+)
+
+f_cartographie_concentrations(fond_carte,
+                              shp_staq=points_sf,
+                              data_carte=df_valeurs,
+                              col_stations="code",
+                              col_valeurs="valeur",
+                              titre="Bilan des concentrations en pesticides",
+                              sous_titre="Date de la campagne",
+                              breaks=c(0, 0.5, 2, Inf),
+                              values = c("cyan", "yellow", "red", "black"),
+                              pts_size=6,
+                              text_size=5,
+                              unite="µg/L",
+                              nom_legende="Concentrations",
+                              nb_decimal_text=1)
+
+```
+  
+```{r tests-f_cartographie_concentrations}
+test_that("f_cartographie_concentrations works", {
+  expect_true(inherits(f_cartographie_concentrations, "function")) 
+})
+```
+  
+
+# importe_ref_pestibase
+    
+```{r development-importe_ref_pestibase}
+# You can prepare the code of the importe_ref_pestibase() function here
+```
+  
+```{r function-importe_ref_pestibase}
+#' importe_ref_pestibase
+#' 
+#' Import du référentiel Pestibase de l'OEB
+#'
+#' Cette fonction télécharge et traite le référentiel des substances actives 
+#' (pesticides) publié par l'Observatoire de l'Environnement en Bretagne (OEB).
+#' Elle retourne une liste d'objets R correspondant aux différentes catégories 
+#' de substances : phytosanitaires, biocides, métabolites, etc...
+#'
+#' @param url URL du fichier CSV à importer. Par défaut, l'URL pointe vers le 
+#' fichier complet du référentiel sur le portail data.bretagne-environnement.fr.
+#'
+#' @return Une liste nommée contenant les éléments suivants :
+#' \describe{
+#'   \item{liste_phytos}{Substances identifiées comme phytosanitaires 
+#'   (autorisées ou non).}
+#'   \item{liste_phytos_autorises}{Phytosanitaires actuellement autorisés, 
+#'   y compris les variantes associées.}
+#'   \item{liste_phytos_non_autorises}{Phytosanitaires ayant été autorisés mais 
+#'   ne l'étant plus.}
+#'   \item{liste_metabolites}{Ensemble des métabolites de pesticides 
+#'   (pertinents ou non).}
+#'   \item{liste_metabolites_pertinents}{Sous-ensemble des métabolites jugés 
+#'   pertinents.}
+#'   \item{liste_metabolites_non_pertinents}{Sous-ensemble des métabolites jugés
+#'    non pertinents.}
+#'   \item{liste_biocides}{Substances identifiées comme biocides.}
+#'   \item{liste_pesticides}{Ensemble des substances identifiées comme 
+#'   pesticides ou métabolites.}
+#' }
+#'
+#' @details
+#' - La fonction effectue des vérifications sur la structure du fichier et 
+#' envoie une alerte par mail en cas d'erreur.
+#' - Les variantes de substances autorisées sont intégrées à la liste des 
+#' phytosanitaires autorisés via les codes SANDRE.
+#'
+#' @examples
+#' \dontrun{
+#'   ref_pestibase <- importe_ref_pestibase()
+#'   names(ref_pestibase)
+#' }
+#'
+#' @export
+importe_ref_pestibase <- function(url=NULL){
+
+  if(is.null(url))
+{url<-"https://data.bretagne-environnement.fr/data-fair/api/v1/datasets/qa4yo6sypr0x07-mj80iqk7a/data-files/oeb_referentiel_substances_actives-full.csv"}
+  
+# Charger le fichier CSV dans la variable new_ref_oeb
+new_ref_oeb0 <- tryCatch(
+  {
+    readr::read_csv(url,
+             show_col_types =FALSE)
+  },
+  error = function(e) {
+    message("Erreur : impossible de charger le référentiel OEB depuis l'URL fournie.")
+    stop("Chargement interrompu : l'URL de l'OEB ne répond pas ou est invalide.")
+  }
+)
+
+new_ref_oeb<-new_ref_oeb0%>%subset(!is.na(id) & !is.na(id_sandre))
+new_ref_oeb$SA_CodeSANDRE<-new_ref_oeb$id_sandre
+
+new_ref_oeb<- tryCatch(
+  {
+    new_ref_oeb %>% select(
+      id,
+      id_sandre,
+      id_cas,
+      name_fr,
+      SA_CodeSANDRE,
+      has_metabolite,
+      dw_pertinence_status,
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      function_fr,
+      function_bzh,
+      has_variant,
+      has_metabolite,
+      biocidal_product_type,
+      list_parent_measures,
+      is_ref_ppp,
+      is_bnvd,
+      is_ref_biocid,
+      vmax,
+      is_edc_list1,
+      aa_eqs_dw,
+      aa_eqs,
+      aa_eqs_mac,
+      aa_eqs_eco_psee,
+      log_biodeg_halflife,
+      pc_log_henry,
+      pc_log_koc, 
+      pnec,
+      eu_ppp_status,
+      eu_ppp_approval_date,
+      eu_ppp_expiry_date,
+      eu_ppp_legislation,
+      eu_biocid_status,
+      eu_biocid_approval_date,
+      eu_biocid_expiry_date,
+      is_neonicotinoid
+    )
+    
+  },
+  error = function(e) {
+     message("Erreur lors de la tentative de chargement du referentiel. Le 
+             fichier telecharge depuis l'OEB ne contient pas les noms de 
+             colonnes attendus.")
+    stop("Les colonnes du referentiel pesticide OEB ne sont pas celles attendues")
+    }
+)
+
+  new_ref_oeb <- new_ref_oeb %>%
+    dplyr::mutate(SA_CodeSANDRE = as.character(SA_CodeSANDRE))%>%
+    dplyr::mutate(function_finale = ifelse(!is.na(function_bzh), 
+                                           function_bzh, 
+                                           function_fr))
+
+# LISTE DES METABOLITES
+# Extraire les ids des deux tableaux
+id_metabolites <- unlist(stringr::str_split(new_ref_oeb$has_metabolite, "\\|"))
+liste_metabolites <- new_ref_oeb %>%   
+  filter(id %in% id_metabolites)%>% 
+  dplyr::mutate(type="métabolites")
+
+
+# listes phytos autorisés ou interdits
+liste_phytos<-new_ref_oeb%>%
+  subset(is_ref_ppp==1 | is_bnvd==1)%>%
+  mutate(type="phytosanitaires")
+  
+ # On exclu de la liste des métabolites les substances qui sont également des phytos (ex. 2,4-D) 
+  liste_metabolites<-liste_metabolites%>%
+  subset(!(id%in%liste_phytos$id))
+  
+  
+liste_metabolites_non_pertinents<-liste_metabolites%>%
+  subset(dw_pertinence_status=="Non pertinent")%>%
+  dplyr::mutate(type="métabolites non pertinents")
+
+
+liste_metabolites_pertinents<-liste_metabolites%>%
+  subset(!(id%in%liste_metabolites_non_pertinents$id))%>%
+  dplyr::mutate(type="métabolites pertinents")
+
+# liste phytos autorisés
+liste_phytos_autorises<-liste_phytos%>%
+  subset(!is.na(has_authorized_oepp_culture))
+
+#on ajoute les paramètres qui intègrent la mesure de phytos autorisés (ex. Diméthénamide intègre diméthénamide P)
+# Extraction des codes SANDRE
+codes_sandre <- liste_phytos_autorises %>%
+  subset(!is.na(list_parent_measures))%>%
+  mutate(codes = stringr::str_extract_all(list_parent_measures, "sandre\\s*:\\s*(\\d{4})")) %>%
+  pull(codes) %>%
+  unlist() %>%
+  stringr::str_extract("\\d{4}") %>%
+  unique()
+
+variants <- new_ref_oeb%>%
+  subset(id_sandre %in% codes_sandre)%>%
+  mutate(type="phytos autorisés")
+
+liste_phytos_autorises<-rbind(liste_phytos_autorises,variants)
+
+liste_phytos_autorises<-liste_phytos_autorises%>%
+  mutate(type="phytos autorisés")%>%
+  unique
+
+# liste phytos non autorisés
+liste_phytos_non_autorises<-liste_phytos%>%
+ subset(!(id%in%liste_phytos_autorises$id))%>%
+  mutate(type="phytos non autorisés")%>%
+  unique
+
+# liste pesticides
+liste_pesticides<-new_ref_oeb %>%
+  mutate(type="pesticides et métabolites")%>%
+  unique
+
+#liste biocides
+liste_biocides<-new_ref_oeb %>%
+  subset(is_ref_biocid==1)%>%
+  mutate(type="biocides")
+
+# agrégation
+liste_des_listes_pesticides<-list(liste_phytos=liste_phytos,
+                                  liste_phytos_autorises=liste_phytos_autorises,
+                                  liste_phytos_non_autorises=liste_phytos_non_autorises,
+                                  liste_metabolites=liste_metabolites,
+                                  liste_metabolites_pertinents=liste_metabolites_pertinents,
+                                  liste_metabolites_non_pertinents=liste_metabolites_non_pertinents,
+                                  liste_biocides=liste_biocides,
+                                  liste_pesticides=liste_pesticides)  
+  
+  
+  return(liste_des_listes_pesticides)
+  
+}
+```
+  
+```{r example-importe_ref_pestibase}
+base_pesticides<-importe_ref_pestibase()
+
+head(base_pesticides)
+```
+  
+```{r tests-importe_ref_pestibase}
+test_that("importe_ref_pestibase works", {
+  expect_true(inherits(importe_ref_pestibase, "function")) 
+})
+```
+  
+# calcule_somme_pesticides
+    
+```{r development-calcule_somme_pesticides}
+# You can prepare the code of the calcule_somme_pesticides() function here
+```
+  
+```{r function-calcule_somme_pesticides}
+#' calcule_somme_pesticides
+#' 
+#' Calcule la somme des concentrations en pesticides
+#'
+#' Cette fonction calcule la somme des concentrations en pesticides pour chaque station et chaque date.
+#' Elle applique plusieurs règles de traitement :
+#' - Si plusieurs résultats existent pour un même paramètre, seule la valeur maximale est retenue.
+#' - Si un paramètre est inclus dans un autre (ex. S-métolachlore dans métolachlore total), seule la valeur du paramètre englobant est conservée.
+#' - Certains paramètres sont des sommes de plusieurs autres (ex. Somme des Hexachlorocyclohexanes).
+#' - Des conversions sont appliquées pour certains sels ou formes isomériques.
+#'
+#' @param data Dataframe contenant les résultats d'analyse.
+#' @param liste_pesticides Vecteur des identifiants des pesticides à prendre en compte. Si NULL, tous les paramètres présents dans le tableau sont utilisés.
+#' @param col_parametre Nom de la colonne identifiant les pesticides. Par défaut `"CdParametre"`.
+#' @param col_date Nom de la colonne contenant les dates de prélèvement. Par défaut `"DatePrel"`.
+#' @param col_valeur Nom de la colonne contenant les résultats d'analyse. Par défaut `"RsAna"`.
+#' @param col_CdRq Nom de la colonne contenant les codes de remarque d'analyse. Par défaut `"CdRqAna"`.
+#' @param col_LQ Nom de la colonne contenant les limites de quantification. Par défaut `"LqAna"`.
+#' @param col_station Nom de la colonne identifiant les stations. Par défaut `"CdStationMesureEauxSurface"`.
+#' @param col_unite Nom de la colonne contenant les unités de mesure. Par défaut `"CdUniteMesure"`.
+#' @param valeur_inf_LQ Stratégie pour les valeurs inférieures à la LQ : `"0"` (remplacées par 0), `"LQ/2"` (remplacées par LQ/2), `"LQ"` (remplacées par LQ). Par défaut `"0"`.
+#' @param resultat_seul Booléen. Si TRUE, seule la colonne de somme des pesticides est retournée. Si FALSE, chaque pesticide est retourné dans une colonne séparée. Par défaut `TRUE`.
+#'
+#' @return Un dataframe contenant les concentrations en pesticides par station et date, avec les traitements appliqués. Si `resultat_seul = TRUE`, seules les colonnes de somme sont retournées.
+#'
+#' @export
+calcule_somme_pesticides <-
+  function(data,
+           liste_pesticides = NULL,
+           col_parametre = "CdParametre",
+           col_date = "DatePrel",
+           col_valeur = "RsAna",
+           col_CdRq = "CdRqAna",
+           col_LQ = "LqAna",
+           col_station = "CdStationMesureEauxSurface",
+           col_unite = "CdUniteMesure",
+           valeur_inf_LQ = "0",
+           resultat_seul = T) {
+    # teste si le format en entrée est correct
+    if (!valeur_inf_LQ %in% c("0", "LQ/2", "LQ")) {
+      stop("valeur_inf_LQ ne correspond pas à une valeur possible ('0','LQ/2','LQ')")
+    }
+
+    # mise en forme du tableau de donnees
+    data1 <- data
+    data1$CdParametre <- data[[col_parametre]]
+    data1$DatePrel <- data[[col_date]]
+    data1$RsAna <- data[[col_valeur]]
+    data1$CdRqAna <- data[[col_CdRq]]
+    data1$LqAna <- data[[col_LQ]]
+    data1$CdStationMesureEauxSurface <- data[[col_station]]
+    data1$CdUniteMesure <- data[[col_unite]]
+
+    # s'il existe le paramètre somme des pesticides (code SANDRE 6276) dans le jeu de données, on supprime ces lignes car on va recalculer le paramètre
+    try(data1 <- data1 %>% subset(CdParametre != "6276"))
+
+
+    # si liste des pesticides n'est pas nulle, on ne retient que les pesticides de la liste
+    if (!is.null(liste_pesticides)) {
+      data1 <- data1 %>% subset(CdParametre %in% liste_pesticides)
+      if (nrow(data) != nrow(data1)) {
+        warning(
+          paste0(
+            "Attention ",
+            nrow(data) - nrow(data1),
+            " lignes de donnees ne correspondent pas a des pesticides de la liste. Ces lignes ont ete ignorees dans le calcul de la somme des pesticides."
+          )
+        )
+      }
+    }
+    if (is.null(liste_pesticides)) {
+      liste_pesticides <- data1$CdParametre %>% unique()
+    }
+
+    # si la liste des données est nulle, on renvoie un message d'erreur
+    if (nrow(data1) == 0) {
+      stop("Aucune donnée pesticides parmi le tableau de données.")
+    }
+
+    # si les unites sont differentes, on renvoie un message d'erreur
+    if (length(unique(data1$CdUniteMesure)) > 1) {
+      stop(
+        "Toutes les analyses doivent être dans la même unité pour pouvoir calculer les sommes de pesticides."
+      )
+    }
+
+    unite <- data1$CdUniteMesure[1]
+
+    # on applique la strategie LQ
+    if (valeur_inf_LQ == "0") {
+      try(data1[data1$CdRqAna != "1",]$RsAna <- 0, silent = T)
+    }
+    if (valeur_inf_LQ == "LQ/2") {
+      try(data1[data1$CdRqAna != "1",]$RsAna <-
+            data1[data1$CdRqAna != "1",]$LqAna / 2, silent = T)
+    }
+    if (valeur_inf_LQ == "LQ") {
+      try(data1[data1$CdRqAna != "1",]$RsAna <-
+            data1[data1$CdRqAna != "1",]$LqAna, silent = T)
+    }
+
+    # on fait un tableau croise par date / code station
+    data2 <-
+      tidyr::pivot_wider(
+        data1,
+        id_cols = c("CdStationMesureEauxSurface", "DatePrel", "CdUniteMesure"),
+        names_from = "CdParametre",
+        names_prefix = "par_",
+        values_from = "RsAna",
+        values_fn = max,
+        values_fill = NA
+      )
+
+    # Fonction de remplacement d'une substance par une qui la contient
+    # exemple Mécoprop (1214) > Mécoprop-P (2084)
+    # exemple f_remplace_inclus_dedans(2084, 1214)
+    # l'énantiomère peut aussi être un sel
+    # coef conversion = coef pour convertir un sel en la molécule mère (ex sulfosate en glyphosate)
+    # ex f_remplace_inclus_dedans("2077", "1506", 0.690)
+    f_remplace_inclus_dedans <- function(cd_sandre_enantiomere,
+                                     cd_sandre_molecule_supra,
+                                     coef_conversion = 1) {
+  col_enantiomere <- paste0("par_", cd_sandre_enantiomere)
+  col_molecule <- paste0("par_", cd_sandre_molecule_supra)
+
+  # Si la molécule englobante est dans la liste des pesticides, on s'assure que sa colonne existe
+  if (cd_sandre_molecule_supra %in% liste_pesticides) {
+    if (!(col_molecule %in% names(data2))) {
+      data2[[col_molecule]] <- NA
+    }
+  }
+
+  # Si la molécule englobante existe dans le tableau
+  if (col_molecule %in% names(data2)) {
+    # Si la colonne de l'enantiomère n'existe pas, on la crée avec des 0
+    if (!(col_enantiomere %in% names(data2))) {
+      data2[[col_enantiomere]] <- 0
+    }
+
+    # Conversion si nécessaire
+    data2[[col_enantiomere]] <- data2[[col_enantiomere]] * coef_conversion
+
+    # Calcul du maximum entre les deux colonnes
+    data2$maxi_par <- apply(data2[, c(col_enantiomere, col_molecule)], 1, function(x) {
+      if (all(is.na(x))) NA else max(x, na.rm = TRUE)
+    })
+
+    # Remplacement de la colonne englobante par le maximum
+    data2[[col_molecule]] <- data2$maxi_par
+
+    # Suppression des colonnes intermédiaires
+    data2$maxi_par <- NULL
+    data2[[col_enantiomere]] <- NULL
+  }
+
+  return(data2)
+}
+
+
+    # fonction pour sommer les paramètres individuels qui sont groupés dans un paramètre somme
+remplace_somme <- function(code_somme, vecteur_codes_a_sommer) {
+  if (code_somme %in% liste_pesticides) {
+    col_somme <- paste0("par_", code_somme)
+
+    # Crée la colonne de somme si elle n'existe pas
+    if (!(col_somme %in% names(data2))) {
+      data2[[col_somme]] <- NA
+    }
+
+    # Crée les colonnes des sous-composantes si elles n'existent pas
+    for (code in vecteur_codes_a_sommer) {
+      col_tmp <- paste0("par_", code)
+      if (!(col_tmp %in% names(data2))) {
+        data2[[col_tmp]] <- 0
+      }
+    }
+
+    # Somme des sous-composantes
+    cc <- paste0("par_", vecteur_codes_a_sommer)
+    data2$par_somme_tmp <- rowSums(data2[, cc], na.rm = TRUE)
+
+    # Max entre la somme et la valeur existante du paramètre somme
+    data2$par_somme_tmp <- apply(
+      data2[, c("par_somme_tmp", col_somme)],
+      1,
+      function(x) if (all(is.na(x))) NA else max(x, na.rm = TRUE)
+    )
+
+    # Remplacement de la colonne somme si elle est NA
+    data2[[col_somme]] <- ifelse(
+      is.na(data2[[col_somme]]),
+      data2$par_somme_tmp,
+      data2[[col_somme]]
+    )
+
+    # Suppression des colonnes des sous-composantes et de la colonne temporaire
+    data2 <- data2[, !(names(data2) %in% c(cc, "par_somme_tmp"))]
+  }
+
+  return(data2)
+}
+
+    # cas du métolachlore
+    #  Métolachlore total (1221) > S-Métolachlore (2974) > Métolachlore énantiomère S (8070) +  Métolachlore énantiomère R (8071)
+    # Métolachlore total (1221) = Métolachlore énantiomère S (8070) +  Métolachlore énantiomère R (8071)
+    data2 <-
+      remplace_somme(code_somme = "1221",
+                     vecteur_codes_a_sommer = c("8070", "8071"))
+
+    #  S-Métolachlore (2974) est inclus dans Métolachlore total (1221)
+    data2 <-
+      f_remplace_inclus_dedans(cd_sandre_enantiomere = "2974",
+                               cd_sandre_molecule_supra = "1221")
+
+    # cas du mecoprop
+    #  Mécoprop (1214) > Mécoprop-P (2084)
+    data2 <- f_remplace_inclus_dedans("2084", "1214")
+
+    # cas du diméthénamide
+    #  Diméthénamide (1678) > Diméthénamide-P (5617)
+    data2 <- f_remplace_inclus_dedans("5617", "1678")
+
+    # cas du Dichlorprop
+    #  Dichlorprop (1169) > Dichlorprop-P (2544)
+    data2 <- f_remplace_inclus_dedans("2544", "1169")
+
+    # cas du Uniconizole
+    #  Uniconizole (7482) > Uniconizole-P (	5845)
+    data2 <- f_remplace_inclus_dedans("5845", "7482")
+
+    # cas du Fluazifop
+    #  Fluazifop (6545) > Fluazifop-P (5634)
+    data2 <- f_remplace_inclus_dedans("5634", "6545")
+
+    # cas du sulfosate, sel du glyphosate (on converti le résultat en glyphosate si ce dernier n'est pas déjà mesuré)
+    # Sulfosate (2077) = sel du glyphosate (1506). Pour calculer la concentration en glyphosate à partir du sulfosate, il faut multiplier cette dernière par 0.690
+    data2 <- f_remplace_inclus_dedans("2077", "1506", 0.690)
+
+    # propamocarbe HCl (2988) = sel du propamocarbe (6398) (masse molaires respectives 188.271 g/mol et 224.724 g/mol)
+    data2 <- f_remplace_inclus_dedans("6398", "2988", 188.271/224.724)
+
+    #	Mepiquat chlorure (2089) = sel du mepiquat (1969). Pour calculer la concentration en mepiquat à partir du Mépiquat chlorure, il faut multiplier cette dernière par 0.7631
+    data2 <- f_remplace_inclus_dedans("2089", "1969", 0.7631)
+
+    # Somme des Hexachlorocyclohexanes (5537) = Hexachlorocyclohexane alpha (1200)
+    # + bêta (1201) + delta (1202) + gamma (1203)
+    data2 <-
+      remplace_somme(
+        code_somme = "5537",
+        vecteur_codes_a_sommer = c("1200", "1201", "1202", "1203")
+      )
+
+    # Somme Heptachlore époxyde cis/trans (1198) = Heptachlore époxyde cis (1748)  + trans (1749)
+    data2 <-
+      remplace_somme(code_somme = "1198",
+                     vecteur_codes_a_sommer = c("1748", "1749"))
+
+    # Somme du DDE 44' et de la dieldrine
+    data2 <-
+      remplace_somme(code_somme = "6500",
+                     vecteur_codes_a_sommer = c("1146", "1173"))
+
+    # Somme des metabolites des dithiocarbamates (6235) = Ethylenethiouree (5648) + Ethyluree (5484) + Propylene thiouree (6214)
+    data2 <-
+      remplace_somme(
+        code_somme = "6235",
+        vecteur_codes_a_sommer = c("5648", "5484", "6214")
+      )
+
+    # Somme de Fluazifop-P-butyl (1404) et de Fluazifop-butyl (1825)
+    data2 <-
+      remplace_somme(code_somme = "8366",
+                     vecteur_codes_a_sommer = c("1404", "1825"))
+
+    # Somme de Ethylamine + Diméthylamine (	7887) = Ethylamine (6993) + Diméthylamine (2773)
+    data2 <-
+      remplace_somme(code_somme = "7887",
+                     vecteur_codes_a_sommer = c("6993", "2773"))
+
+    # Somme du Fenvalerate RR et Esfenvalerate SS (6613) = Fenvalerate RR 6606 + Esfenvalerate SS 6608
+    data2 <-
+      remplace_somme(code_somme = "6613",
+                     vecteur_codes_a_sommer = c("6606", "6608"))
+
+    # Somme des chloroanilines (m+p) 5502	= Chloroaniline-4 1591 + Chloroaniline-3 1592
+    data2 <-
+      remplace_somme(code_somme = "5502",
+                     vecteur_codes_a_sommer = c("1591", "1592"))
+
+    # Somme Acétochlore ESA + Alachlore ESA (7750) = Acétochlore ESA 6856 + Alachlore ESA 6800
+    data2 <-
+      remplace_somme(code_somme = "7750",
+                     vecteur_codes_a_sommer = c("6856", "6800"))
+
+    # Somme du DDD 44' et du DDT 24'6496 = DDD 44' 1144 + DDT 24' 1147
+    data2 <-
+      remplace_somme(code_somme = "6496",
+                     vecteur_codes_a_sommer = c("1144", "1147"))
+
+    # Somme DDT (3268) = DDT 24' (1147) + DDT 44' (1148)
+    data2 <-
+      remplace_somme(code_somme = "3268",
+                     vecteur_codes_a_sommer = c("1147", "1148"))
+
+    # Somme DDT et métabolites DDE DDD (6497) = DDDop' (1143) + DDDpp' (1144) + DDEop' (1145) + DDEpp' (1146) + DDTop' (1147) + DDTpp' (1148)
+    data2 <-
+      remplace_somme(
+        code_somme = "6497",
+        vecteur_codes_a_sommer = c("1143", "1144", "1145", "1146", "1147", "1148")
+      )
+
+    # Somme DDT et métabolites DDE DDD (6497) = DDDpp' (1144) + DDEpp' (1146) + Somme du DDD 24', DDE 24', DDT 24', DDT 44' (7170)
+    data2 <-
+      remplace_somme(
+        code_somme = "6497",
+        vecteur_codes_a_sommer = c("1144", "1146", "7170")
+      )
+
+    # Somme Metacresol, Orthocresol et Paracrésol 6341 = ortho-crésol 1640 + méta-crésol 1639 + para-crésol 1638
+    data2 <-
+      remplace_somme(
+        code_somme = "6341",
+        vecteur_codes_a_sommer = c("1640", "1639", "1638")
+      )
+
+    # Somme parathion ethyl+methyl 6947	= parathion éthyl 1232 + parathion methyl 1233
+    data2 <-
+      remplace_somme(code_somme = "6947",
+                     vecteur_codes_a_sommer = c("1232", "1233"))
+
+    # Somme du DDD 24', DDE 24', DDT 24', DDT 44' 7170 =  DDD 24' 1143 + DDE 24' 1145 + DDT 24' 1147 + DDT 44' 1148
+    data2 <-
+      remplace_somme(
+        code_somme = "7170",
+        vecteur_codes_a_sommer = c("1143", "1145", "1147", "1148")
+      )
+
+    # Somme du DDDpp', DDEpp', DDTop', DDTpp' 7146 = DDDpp' 1144 + DDEpp' 1146 + DDTop' 1147 + DDTpp' 1148
+    data2 <-
+      remplace_somme(
+        code_somme = "7146",
+        vecteur_codes_a_sommer = c("1144", "1146", "1147", "1148")
+      )
+
+    # Somme de l'Alachlor OXA et de l'Acetochlor OXA 8101	= Alachlor OXA 6855 + Acetochlor OXA 6862
+    data2 <-
+      remplace_somme(code_somme = "8101",
+                     vecteur_codes_a_sommer = c("6855", "6862"))
+
+    # Somme de Endosulfan (1743) = Endosulfan alpha (1178) + Endosulfan bêta (1179)
+    data2 <-
+      remplace_somme(code_somme = "1743",
+                     vecteur_codes_a_sommer = c("1178", "1179"))
+
+    # Somme de Endosulfan alpha, Endosulfan bêta et Endosulfan sulfate (8129) = Endosulfan alpha (1178) + Endosulfan bêta (1179) + Endosulfan sulfate (1742)
+    data2 <-
+      remplace_somme(
+        code_somme = "8129",
+        vecteur_codes_a_sommer = c("1178", "1179", "1742")
+      )
+
+    # Somme de Endosulfan alpha, Endosulfan bêta et Endosulfan sulfate (8129) = (Somme de Endosulfan (1743)) + Endosulfan sulfate (1742)
+    data2 <-
+      remplace_somme(code_somme = "8129",
+                     vecteur_codes_a_sommer = c("1743", "1742"))
+
+    # Somme de Chlordane (1132) = Chlrodane alpha (7010) + chlordane bêta (1757)
+    data2 <-
+      remplace_somme(code_somme = "1132",
+                     vecteur_codes_a_sommer = c("7010", "1757"))
+
+    # Somme de Déméton (1550) = Déméton-O (1150) + Déméton-S (1152)
+    data2 <-
+      remplace_somme(code_somme = "1550",
+                     vecteur_codes_a_sommer = c("1150", "1152"))
+
+    # Métalaxyl (1706) (inclus les formes métalaxyl-M = Méfénoxam (2987) )
+    data2 <- f_remplace_inclus_dedans("2987", "1706")
+
+    # HCH alpha+beta+delta+gamma (5537) = HCH delta (1202) + HCH alpha (1200)+ HCH béta (1201)+ HCH gamma (lindane) (1203)
+    data2 <-
+      remplace_somme(
+        code_somme = "5537",
+        vecteur_codes_a_sommer = c("1200", "1201", "1202", "1203")
+      )
+
+    # Permethrin (somme)(1523)= Permethrin cis (5682) +Permethrin trans (5683)
+    data2 <-
+      remplace_somme(code_somme = "1523",
+                     vecteur_codes_a_sommer = c("5682", "5683"))
+
+    # Fenvalerate (1701) =  Fenvalerate RR (6606) + Fenvalerate RS (6607)
+    data2 <-
+      remplace_somme(code_somme = "1701",
+                     vecteur_codes_a_sommer = c("6606", "6607"))
+
+    # Esfenvalerate (1809)= Esfenvalerate SS (6608) +  Esfenvalerate SR (6609)
+    data2 <-
+      remplace_somme(code_somme = "1809",
+                     vecteur_codes_a_sommer = c("6608", "6609"))
+
+    # (Somme du Fenvalerate RR et Esfenvalerate SS ( 6613 ))= Fenvalerate RR (6606) + Esfenvalerate SS (6608)
+    data2 <-
+      remplace_somme(code_somme = "6613",
+                     vecteur_codes_a_sommer = c("6606", "6608"))
+
+    # (Somme du Fenvalerate RS et Esfenvalerate SR (6614)) = Fenvalerate RS (6607) + Esfenvalerate SR (6609)
+    data2 <-
+      remplace_somme(code_somme = "6614",
+                     vecteur_codes_a_sommer = c("6607", "6609"))
+
+    # (Somme du Fenvalerate et du Esfenvalerate 	(8592)) = Fenvalerate (1701) + Esfenvalerate (1809)
+    data2 <-
+      remplace_somme(code_somme = "8592",
+                     vecteur_codes_a_sommer = c("1701", "1809"))
+
+    # (Somme du Fenvalerate et du Esfenvalerate 	(8592)) = Somme du Fenvalerate RR et Esfenvalerate SS ( 6613 ) + Somme du Fenvalerate RS et Esfenvalerate SR (6614)
+    data2 <-
+      remplace_somme(code_somme = "8592",
+                     vecteur_codes_a_sommer = c("6613", "6614"))
+
+    # (Somme du Fenvalerate et du Esfenvalerate 	(8592)) =  Fenvalerate RR (6606) + Esfenvalerate SS (6608) + Fenvalerate RS (6607) + Esfenvalerate SR (6609)
+    data2 <-
+      remplace_somme(
+        code_somme = "8592",
+        vecteur_codes_a_sommer = c("6606", "6608", "6607", "6609")
+      )
+
+    # Chlordane (cis + trans) (1132) = chlordane alpha (7010) +  chlordane bêta (1757)
+    data2 <-
+      remplace_somme(code_somme = "1132",
+                     vecteur_codes_a_sommer = c("7010", "1757"))
+
+    # Demeton O+S (1550) = déméton-O (code Sandre n°1150) + déméton-S (code Sandre n°1152)
+    data2 <-
+      remplace_somme(code_somme = "1550",
+                     vecteur_codes_a_sommer = c("1150", "1152"))
+
+    # Heptachlore époxyde (cis+trans) (1198) = Heptachlore époxyde exo cis (1748) + Heptachlore époxyde endo trans (1749)
+    data2 <-
+      remplace_somme(code_somme = "1198",
+                     vecteur_codes_a_sommer = c("1748", "1749"))
+
+    # Spinosad (A+D) (spinosyne) (5610) = Spinosad A (7438) + Spinosad D (7439)
+    data2 <-
+      remplace_somme(code_somme = "5610",
+                     vecteur_codes_a_sommer = c("7438", "7439"))
+
+    # calcul de la somme de pesticides
+cols_par <- grep("^par_", names(data2), value = TRUE)
+data2$par_6276 <- rowSums(data2[, cols_par], na.rm = TRUE)
+
+    # si option resultat_seul, on supprime toutes les colonnes intermédiaires
+    if (resultat_seul) {
+      data2 <-
+        data2[, c("CdStationMesureEauxSurface",
+                  "DatePrel",
+                  "CdUniteMesure",
+                  "par_6276")]
+
+      data2$CdSupport <- "3"
+      data2$CdFractionAnalysee <- "23"
+      data2$CdRqAna <- ifelse(data2$par_6276 == 0, "10", "1")
+      data2$LqAna <- 0
+
+    }
+
+    # on remet le tableau de resultat au format long pour faciliter les aggrégations avec les autres données et l'usage des ggplot
+    data2 <-
+      data2 %>% tidyr::pivot_longer(
+        names_to = 'CdParametre',
+        cols = starts_with('par_'),
+        names_prefix = "par_",
+        values_to = "RsAna",
+        values_drop_na = T
+      )
+    return(data2)
+  }
+
+```
+  
+```{r example-calcule_somme_pesticides}
+data <- data.frame(
+   DatePrel = Sys.Date() + rep(sort(sample(1:500, 10)), 3),
+   RsAna = round(runif(60, 0, 0.5), 2),
+   LqAna = 0.1,
+   CdStationMesureEauxSurface = c("A", "B", "C"),
+   CdParametre = c("1200", "1506"),
+   CdUniteMesure = "133"
+ )
+ data$CdRqAna <- ifelse(data$RsAna >= data$LqAna, "1", "10")
+ calcule_somme_pesticides(data)
+```
+  
+```{r tests-calcule_somme_pesticides}
+test_that("calcule_somme_pesticides works", {
+  expect_true(inherits(calcule_somme_pesticides, "function")) 
+})
+```
+  
+# analyse_fonctions_pesticides
+
+```{r function-analyse_fonctions_pesticides}
+#' analyse_fonctions_pesticides
+#' 
+#' Analyse des fonctions des substances pesticides
+#'
+#' Cette fonction permet d'analyser les fonctions des substances pesticides quantifiées
+#' à partir d'un jeu de données analytique et d'une table de référence des pesticides.
+#' Elle filtre les résultats selon un code de remarque analytique, joint les données
+#' aux fonctions des substances, puis génère un graphique ggplot représentant la
+#' répartition des fonctions en pourcentage de la concentration totale mesurée.
+#'
+#' @param data Data frame contenant les résultats analytiques, incluant les colonnes
+#' correspondant aux codes de remarque et de paramètre.
+#' @param code_remarque Nom de la colonne dans `data` correspondant au code de remarque analytique.
+#' Par défaut `"CdRqAna"`.
+#' @param code_parametre Nom de la colonne dans `data` correspondant au code du paramètre.
+#' Par défaut `"CdParametre"`.
+#' @param liste_pesticides Data frame issu de la fonction `importe_ref_pestibase`, contenant
+#' les colonnes `SA_CodeSANDRE`, `function_bzh` et `function_fr` pour l'association des fonctions.
+#'
+#' @return Un objet `ggplot` représentant la répartition des fonctions des substances
+#' pesticides quantifiées.
+#'
+#' @export
+analyse_fonctions_pesticides <- function(data, 
+                                         code_remarque = "CdRqAna",
+                                         code_parametre = "CdParametre",
+                                         liste_pesticides) {
+  # Vérifications des paramètres
+  if (!is.data.frame(data)) {
+    stop("Le paramètre 'data' doit être un data.frame contenant les résultats analytiques.")
+  }
+  if (!is.character(code_remarque) || length(code_remarque) != 1) {
+    stop("Le paramètre 'code_remarque' doit être une chaîne de caractères correspondant au nom d'une colonne de 'data'.")
+  }
+  if (!is.character(code_parametre) || length(code_parametre) != 1) {
+    stop("Le paramètre 'code_parametre' doit être une chaîne de caractères correspondant au nom d'une colonne de 'data'.")
+  }
+  if (!(code_remarque %in% names(data))) {
+    stop(paste0("La colonne '", code_remarque, "' est absente du data.frame 'data'."))
+  }
+  if (!(code_parametre %in% names(data))) {
+    stop(paste0("La colonne '", code_parametre, "' est absente du data.frame 'data'."))
+  }
+  if (!("RsAna" %in% names(data))) {
+    stop("La colonne 'RsAna' est requise dans 'data' pour calculer les concentrations.")
+  }
+  if (!is.data.frame(liste_pesticides)) {
+    stop("Le paramètre 'liste_pesticides' doit être un data.frame issu de la fonction 'importe_ref_pestibase'.")
+  }
+  required_cols <- c("SA_CodeSANDRE", "function_bzh", "function_fr")
+  missing_cols <- setdiff(required_cols, names(liste_pesticides))
+  if (length(missing_cols) > 0) {
+    stop(paste("Les colonnes suivantes sont manquantes dans 'liste_pesticides' :", paste(missing_cols, collapse = ", ")))
+  }
+
+  # Traitement
+  data$CdRqAna <- data[[code_remarque]]
+  data$CdParametre <- data[[code_parametre]]
+
+  data <- data %>%
+    dplyr::filter(CdRqAna == "1") %>%
+    dplyr::left_join(liste_pesticides, by = c("CdParametre" = "SA_CodeSANDRE")) %>%
+    dplyr::mutate(function_finale = dplyr::coalesce(function_bzh, function_fr)) %>%
+    dplyr::mutate(function_finale = ifelse(is.na(function_finale), "Indéterminé", function_finale)) %>%
+    dplyr::mutate(function_finale = ifelse(function_finale=="regulateur", "Régulateur", function_finale)) %>%
+    dplyr::group_by(function_finale) %>%
+    dplyr::summarise(total_quantifie = sum(RsAna, na.rm = TRUE)) %>%
+    dplyr::mutate(pourcentage = total_quantifie / sum(total_quantifie, na.rm = TRUE) * 100) %>%
+    dplyr::arrange(desc(pourcentage))
+
+  g <- ggplot2::ggplot(data, ggplot2::aes(x = reorder(function_finale, pourcentage), y = pourcentage)) +
+    ggplot2::geom_bar(stat = "identity", fill = "steelblue") +
+    ggplot2::coord_flip() +
+    ggplot2::labs(title = "Fonctions des substances quantifiées",
+                  subtitle = "% de la concentration totale mesurée",
+                  x = "", y = "%") +
+    ggplot2::theme_minimal()
+
+  return(g)
+}
+
+
+```
+  
+```{r example-analyse_fonctions_pesticides, fig.width=7}
+
+ref_pestibase <- importe_ref_pestibase()
+
+data <- data.frame(
+   DatePrel = Sys.Date() + rep(sort(sample(1:500, 10)), 3),
+   RsAna = round(runif(60, 0, 0.5), 2),
+   LqAna = 0.1,
+   CdStationMesureEauxSurface = c("A", "B", "C"),
+   CdParametre = sample(ref_pestibase$liste_phytos_autorises$SA_CodeSANDRE,
+                        size=10,
+                        replace=TRUE),
+   CdUniteMesure = "133"
+ )
+ data$CdRqAna <- ifelse(data$RsAna >= data$LqAna, "1", "10")
+
+analyse_fonctions_pesticides(data, 
+                             code_remarque="CdRqAna",
+                             code_parametre="CdParametre",
+                             liste_pesticides=ref_pestibase$liste_phytos_autorises)
+
+
+```
+  
+```{r tests-analyse_fonctions_pesticides}
+test_that("analyse_fonctions_pesticides works", {
+  expect_true(inherits(analyse_fonctions_pesticides, "function")) 
+})
+```
+  
+# fiche_usages_pesticides
+    
+
+  
+```{r function-fiche_usages_pesticides}
+#' fiche_usages_pesticides
+#' Génère un tableau graphique des usages autorisés ou interdits des pesticides par culture
+#'
+#' Cette fonction permet de visualiser, sous forme de tableau coloré, les usages des substances actives
+#' (pesticides) selon leur statut réglementaire : autorisé, interdit ou jamais autorisé, pour différentes cultures.
+#' Les couleurs indiquent :
+#' - **vert** : la substance est actuellement autorisée sur la culture
+#' - **rouge** : la substance a été retirée de l'autorisation
+#' - **blanc** : la substance n'a jamais été autorisée sur la culture
+#'
+#' @param liste_cd_sandre Character vector. Liste des codes SANDRE des masses d'eau pour lesquelles on souhaite afficher les usages.
+#' @param liste_pesticides Data frame. Issu de la fonction `importe_ref_pestibase`, contenant au minimum les colonnes :
+#' - `SA_CodeSANDRE` : code SANDRE de la masse d'eau
+#' - `name_fr` : nom de la substance active
+#' - `function_finale` : fonction associée à la substance
+#' - `has_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles la substance est autorisée
+#' - `has_removed_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
+#'
+#' @return Un objet graphique de type `grob` représentant un tableau coloré des usages par culture.
+#' Ce tableau peut être affiché avec `grid::grid.draw()`.
+#'
+#' @export
+fiche_usages_pesticides <- function(liste_cd_sandre, 
+                                    liste_pesticides) {
+
+  
+    # Fonction logique oui/non
+est_autorise_sur_culture <- function(aut, interd, motif) {
+  aut <- ifelse(is.na(aut), "", aut)
+  interd <- ifelse(is.na(interd), "", interd)
+  
+  aut_detect <- stringr::str_detect(aut, motif)
+  interd_detect <- stringr::str_detect(interd, motif)
+  
+  dplyr::case_when(
+    aut_detect ~ "oui",
+    interd_detect ~ "non",
+    TRUE ~ NA_character_
+  )
+}
+
+  # 
+  liste_pesticides_a_traiter <- liste_pesticides %>%
+    dplyr::mutate(SA_CodeSANDRE = factor(SA_CodeSANDRE, levels = liste_cd_sandre)) %>%
+    dplyr::arrange(SA_CodeSANDRE) %>%
+    dplyr::mutate(
+      Fonction = liste_pesticides$function_finale,
+      `Céréales à paille` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales"),
+      `Maïs` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Maïs"),
+      `Oléagineux` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Arachide|Chanvre|Crucifères|Soja|Tournesol"),
+      `Prairies` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Prairie"),
+      `Fourrages` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Fourragères|Prairies"),
+      `Pomme de terre` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Pomme de terre"),
+      `Betterave` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Betterave"),
+      `Légumes` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Artichaut|Asperge|Carotte|Céleri|Chicorée|Choux|Cresson|Cucurbitacées|Epinard|Haricot|Laitue|Navet|Oignon|Poireau|Pois|Poivron|Salsifis|Tomate|Aubergine|Légumes")
+    )%>%subset(SA_CodeSANDRE%in%liste_cd_sandre)
+  
+  # on s'assure que toutes les colonnes de fonction sont de type character et non logical (cas où aucun usage n'est renseigné dans le tableau)
+  convertir_logical_en_character <- function(df) {
+    df[sapply(df, is.logical)] <- lapply(df[sapply(df, is.logical)], as.character)
+    return(df)
+  }
+  
+  liste_pesticides_a_traiter <- convertir_logical_en_character(liste_pesticides_a_traiter)
+  
+  # Sélection et ordre des colonnes
+  tableau_final <- liste_pesticides_a_traiter %>%
+    dplyr::select(name_fr, Fonction,
+                  `Céréales à paille`, `Maïs`, `Oléagineux`, `Prairies`,
+                  `Fourrages`, `Pomme de terre`, `Betterave`, `Légumes`) %>%
+    dplyr::rename(Substance = name_fr) %>%
+    dplyr::distinct()%>%
+    dplyr::mutate(dplyr::across(everything(), as.character)) %>%
+    dplyr::mutate(dplyr::across(everything(), ~tidyr::replace_na(.x, "")))
+  
+
+  # Création du tableau graphique avec couleurs conditionnelles
+  
+  tableau_grob <- gridExtra::tableGrob(tableau_final, 
+                                       rows = NULL, 
+                                       theme = gridExtra::ttheme_default(
+    core = list(fg_params = list(cex = 0.8)),
+    colhead = list(fg_params = list(cex = 0.8, rot = 45))
+  ))
+  
+  
+  # Extraire les données à colorer (colonnes 3 à n)
+valeurs <- tableau_final[, 3:ncol(tableau_final)]
+
+# Créer une matrice de couleurs
+couleurs <- apply(valeurs, c(1, 2), function(val) {
+  if (is.na(val) || val == "") return("white")
+  if (val == "oui") return("darkgreen")
+  if (val == "non") return("red")
+  return("white")
+})
+  
+
+layout <- tableau_grob$layout
+
+for (i in seq_len(nrow(couleurs))) {
+  for (j in seq_len(ncol(couleurs))) {
+    # Indices dans layout (décalage de +1 pour les lignes à cause des en-têtes)
+    row_idx <- i + 1
+    col_idx <- j + 2  # car Substance et Fonction sont les deux premières colonnes
+
+    cell_bg <- which(layout$t == row_idx & layout$l == col_idx & grepl("core-bg", layout$name))
+    if (length(cell_bg) == 1) {
+      tableau_grob$grobs[[cell_bg]]$gp <- grid::gpar(fill = couleurs[i, j], col = NA)
+    }
+  }
+}
+
+  grid::grid.newpage()
+tableau_grob<-grid::grid.draw(tableau_grob)
+  
+  return(tableau_grob)
+}
+
+```
+  
+```{r example-fiche_usages_pesticides, fig.width=7}
+ref_pestibase <- importe_ref_pestibase()
+
+fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817"),
+                                        liste_pesticides=ref_pestibase$liste_pesticides)
+
+
+```
+  
+```{r tests-fiche_usages_pesticides}
+test_that("fiche_usages_pesticides works", {
+  expect_true(inherits(fiche_usages_pesticides, "function")) 
+})
+```
+  
 
 
 ```{r development-inflate, eval=FALSE}
