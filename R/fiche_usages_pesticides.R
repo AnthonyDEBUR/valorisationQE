@@ -4,10 +4,11 @@
 #' Génère un tableau graphique des usages autorisés ou interdits des pesticides par culture
 #'
 #' Cette fonction permet de visualiser, sous forme de tableau coloré, les usages des substances actives
-#' (pesticides) selon leur statut réglementaire : autorisé, interdit ou jamais autorisé, pour différentes cultures.
+#' (pesticides) selon leur statut réglementaire : autorisé, interdit, variant ou jamais autorisé, pour différentes cultures.
 #' Les couleurs indiquent :
 #' - **vert** : la substance est actuellement autorisée sur la culture
 #' - **rouge** : la substance a été retirée de l'autorisation
+#' - **orange** : la substance n'est pas autorisée mais un de ses variants l'est
 #' - **blanc** : la substance n'a jamais été autorisée sur la culture
 #'
 #' @param liste_cd_sandre Character vector. Liste des codes SANDRE des masses d'eau pour lesquelles on souhaite afficher les usages.
@@ -18,7 +19,33 @@
 #' - `function_finale` : fonction associée à la substance
 #' - `has_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles la substance est autorisée
 #' - `has_removed_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
-#' - `has_variant` : texte listan les identifiants pestibases de variants
+#' - `has_variant` : texte listant les identifiants pestibase de variants
+#' @param legend_position Character. Position de la légende dans le tableau graphique. Valeurs possibles : `"top"`, `"bottom"`, `"left"`, `"right"`.
+#' @param cultures_a_exclure Character vector. Liste des cultures à regrouper dans la catégorie "Autres cultures".
+#' Les noms doivent correspondre aux intitulés des colonnes du tableau. Les éventuels sauts de ligne (`"\n"`) dans les noms de colonnes sont automatiquement convertis en espace.
+#' Les noms valides sont :
+#' \itemize{
+#'   \item `"Céréales à paille"`
+#'   \item `"Maïs"`
+#'   \item `"Oléagineux"`
+#'   \item `"Prairies"`
+#'   \item `"Fourrages"`
+#'   \item `"Pomme de terre"`
+#'   \item `"Betterave"`
+#'   \item `"Légumes"`
+#'   \item `"Vignes"`
+#'   \item `"Traitements généraux"`
+#' }
+#'
+#' @details
+#' Lorsque des cultures sont regroupées dans "Autres cultures", les statuts sont agrégés selon les règles suivantes :
+#' - Si au moins une culture est `"oui"` alors le statut devient `"oui"`
+#' - Sinon, si au moins une culture est `"variant"` alors le statut devient `"variant"`
+#' - Sinon, si au moins une culture est `"non"` alors le statut devient `"non"`
+#' - Sinon → le statut reste vide
+#'
+#' Exemple : le Diméthénamide n'est plus autorisé sur certaines cultures, mais son variant Diméthénamide-P l'est encore.
+#' Dans ce cas, le statut affiché est `"variant"` pour les cultures concernées.
 #'
 #' @return Un objet graphique de type `grob` représentant un tableau coloré des usages par culture.
 #' Ce tableau peut être affiché avec `grid::grid.draw()`.
@@ -27,105 +54,171 @@
 #' @examples
 #' ref_pestibase <- importe_ref_pestibase()
 #'
-#' fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
-#'                                         liste_pesticides=ref_pestibase$liste_pesticides)
+#' fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678", "1859"),
+#'                                         liste_pesticides=ref_pestibase$liste_pesticides,
+#'                         legend_position = "top",
+#'                         cultures_a_exclure=c("Vignes", "Fourrages"))
 #'
 #'
 fiche_usages_pesticides <- function(liste_cd_sandre, 
-                                    liste_pesticides) {
+                                    liste_pesticides,
+                                    legend_position = "bottom",
+                                    cultures_a_exclure = c()) {
 
   
-    # Fonction détectant si la substance est autorisée sur une culture
-est_autorise_sur_culture <- function(aut, interd, motif, variants, df_pesticides) {
-  mapply(function(a, i, v) {
-    a <- ifelse(is.na(a), "", a)
-    i <- ifelse(is.na(i), "", i)
-    v <- ifelse(is.na(v), "", v)
+  # Dictionnaire des cultures et motifs
+cultures_motifs <- list(
+  `Céréales\nà paille` = "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales",
+  `Maïs` = "Maïs",
+  `Oléagineux` = "Arachide|Chanvre|Crucifères|Soja|Tournesol",
+  `Prairies` = "Prairie",
+  `Fourrages` = "Fourragères|Prairies",
+  `Pomme\nde terre` = "Pomme de terre",
+  `Betterave` = "Betterave",
+  `Légumes` = "Artichaut|Asperge|Carotte|Céleri|Chicorée|Choux|Cresson|Cucurbitacées|Epinard|Haricot|Laitue|Navet|Oignon|Poireau|Pois|Poivron|Salsifis|Tomate|Aubergine|Légumes",
+  `Vignes` = "Vigne|Raisin",
+  `Traitements\ngénéraux` = "Traitements généraux"
+)
 
-    aut_detect <- stringr::str_detect(a, motif)
-    interd_detect <- stringr::str_detect(i, motif)
-
-    variant_detect <- FALSE
-    if (v != "") {
-      variant_ids <- unlist(strsplit(v, ","))
-      variant_infos <- df_pesticides[df_pesticides$id %in% variant_ids, ]
-      variant_detect <- any(stringr::str_detect(variant_infos$has_authorized_oepp_culture, motif))
-    }
-
-    dplyr::case_when(
-      aut_detect ~ "oui",
-      !aut_detect & variant_detect ~ "variant",
-      interd_detect ~ "non",
-      TRUE ~ NA_character_
-    )
-  }, aut, interd, variants, SIMPLIFY = TRUE)
+  
+  
+# Vérification du type de liste_cd_sandre
+if (!is.character(liste_cd_sandre)) {
+  stop("Erreur : 'liste_cd_sandre' doit être un vecteur de caractères (character vector).")
 }
 
-  # 
+# Vérification du type de liste_pesticides
+if (!is.data.frame(liste_pesticides)) {
+  stop("Erreur : 'liste_pesticides' doit être un data.frame contenant les informations sur les substances actives.")
+}
+
+# Vérification des colonnes obligatoires dans liste_pesticides
+colonnes_requises <- c("SA_CodeSANDRE", "id", "name_fr", "function_finale",
+                       "has_authorized_oepp_culture", "has_removed_authorized_oepp_culture", "has_variant")
+colonnes_manquantes <- setdiff(colonnes_requises, names(liste_pesticides))
+if (length(colonnes_manquantes) > 0) {
+  stop("Erreur : le data.frame 'liste_pesticides' est incomplet. Il manque les colonnes suivantes : ",
+       paste(colonnes_manquantes, collapse = ", "), ".")
+}
+
+# Vérification du type de legend_position
+if (!is.character(legend_position) || length(legend_position) != 1) {
+  stop("Erreur : 'legend_position' doit être une chaîne de caractères unique (ex. 'bottom').")
+}
+
+# Vérification de la valeur de legend_position
+positions_valides <- c("top", "bottom", "left", "right")
+if (!legend_position %in% positions_valides) {
+  warning("Attention : la valeur de 'legend_position' ('", legend_position, "') n'est pas reconnue. ",
+          "Les valeurs acceptées sont : ", paste(positions_valides, collapse = ", "), 
+          ". La légende ne sera pas affichée.")
+}
+
+# Vérification du type de cultures_a_exclure
+if (!is.character(cultures_a_exclure)) {
+  stop("Erreur : 'cultures_a_exclure' doit être un vecteur de caractères (character vector).")
+}
+  
+    
+# Conversion automatique des noms de cultures : ajout des \n pour correspondre aux noms de colonnes
+normaliser_nom_culture <- function(nom) {
+  nom <- trimws(nom)
+  dplyr::case_when(
+    nom == "Céréales à paille" ~ "Céréales\nà paille",
+    nom == "Pomme de terre" ~ "Pomme\nde terre",
+    nom == "Autres cultures" ~ "Autres\ncultures",
+    TRUE ~ nom  # les autres noms ne contiennent pas de \n
+  )
+}
+
+# Génère un dictionnaire de correspondance entre noms sans \n et noms avec \n
+dictionnaire_noms_cultures <- setNames(
+  gsub("\n", " ", names(cultures_motifs)),  # noms sans \n
+  names(cultures_motifs)                    # noms avec \n
+)
+
+# Conversion automatique des noms de cultures passés en argument
+cultures_a_exclure <- gsub("\n", " ", cultures_a_exclure)  # nettoyage des \n éventuels
+cultures_a_exclure <- names(dictionnaire_noms_cultures)[dictionnaire_noms_cultures %in% cultures_a_exclure]
+cultures_a_exclure <- cultures_a_exclure[!is.na(cultures_a_exclure)]  # suppression des noms non reconnus
+cultures_a_exclure <- vapply(cultures_a_exclure, normaliser_nom_culture, character(1))
+
+# Vérification que toutes les cultures à exclure sont valides
+cultures_connues <- names(cultures_motifs)
+cultures_invalides <- setdiff(cultures_a_exclure, cultures_connues)
+
+if (length(cultures_invalides) > 0) {
+  stop("Erreur : les cultures suivantes ne sont pas reconnues et ne peuvent pas être exclues : ",
+       paste(cultures_invalides, collapse = ", "), ".")
+}
+
+  
+
+# Fonction de détection (version simplifiée et vectorisée)
+est_autorise_sur_culture <- function(df, motif, df_complet = df) {
+  aut <- stringr::str_detect(tidyr::replace_na(df$has_authorized_oepp_culture, ""), motif)
+  interd <- stringr::str_detect(tidyr::replace_na(df$has_removed_authorized_oepp_culture, ""), motif)
+
+  variant_detect <- rep(FALSE, nrow(df))
+  variants <- tidyr::replace_na(df$has_variant, "")
+  idx <- which(variants != "")
+  if (length(idx) > 0) {
+    variant_ids <- strsplit(variants[idx], ",")
+    variant_detect[idx] <- sapply(seq_along(variant_ids), function(i) {
+      ids <- variant_ids[[i]]
+      variant_infos <- df_complet[df_complet$id %in% ids, ]
+      any(stringr::str_detect(variant_infos$has_authorized_oepp_culture, motif))
+    })
+  }
+
+  dplyr::case_when(
+    aut ~ "oui",
+    !aut & variant_detect ~ "variant",
+    interd ~ "non",
+    TRUE ~ NA_character_
+  )
+}
+
+# Application paramétrique
 liste_pesticides_a_traiter <- liste_pesticides %>%
+  dplyr::filter(SA_CodeSANDRE %in% liste_cd_sandre) %>%
   dplyr::mutate(SA_CodeSANDRE = factor(SA_CodeSANDRE, levels = liste_cd_sandre)) %>%
   dplyr::arrange(SA_CodeSANDRE) %>%
-  dplyr::mutate(
-    Fonction = function_finale,
-    `Céréales à paille` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales",
-      has_variant,
-      liste_pesticides
-    ),
-    `Maïs` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Maïs",
-      has_variant,
-      liste_pesticides
-    ),
-    `Oléagineux` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Arachide|Chanvre|Crucifères|Soja|Tournesol",
-      has_variant,
-      liste_pesticides
-    ),
-    `Prairies` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Prairie",
-      has_variant,
-      liste_pesticides
-    ),
-    `Fourrages` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Fourragères|Prairies",
-      has_variant,
-      liste_pesticides
-    ),
-    `Pomme de terre` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Pomme de terre",
-      has_variant,
-      liste_pesticides
-    ),
-    `Betterave` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Betterave",
-      has_variant,
-      liste_pesticides
-    ),
-    `Légumes` = est_autorise_sur_culture(
-      has_authorized_oepp_culture,
-      has_removed_authorized_oepp_culture,
-      "Artichaut|Asperge|Carotte|Céleri|Chicorée|Choux|Cresson|Cucurbitacées|Epinard|Haricot|Laitue|Navet|Oignon|Poireau|Pois|Poivron|Salsifis|Tomate|Aubergine|Légumes",
-      has_variant,
-      liste_pesticides
-    )
-  ) %>%
-  subset(SA_CodeSANDRE %in% liste_cd_sandre)
-  
+  dplyr::mutate(Fonction = function_finale)
+
+# Ajout dynamique des colonnes de cultures
+for (culture in names(cultures_motifs)) {
+  motif <- cultures_motifs[[culture]]
+  liste_pesticides_a_traiter[[culture]] <- est_autorise_sur_culture(
+    liste_pesticides_a_traiter,
+    motif,
+    df_complet = liste_pesticides
+  )
+}
+
+# ajout de autre cultures
+# 1. Extraire toutes les cultures mentionnées
+toutes_cultures <- unique(unlist(stringr::str_extract_all(
+  liste_pesticides$has_authorized_oepp_culture, "\\b[\\p{L}]+(?: [\\p{L}]+)*\\b"
+)))
+
+# 2. Extraire les mots-clés des motifs déjà utilisés
+motifs_utilises <- unlist(stringr::str_split(unlist(cultures_motifs), "\\|"))
+motifs_utilises <- unique(trimws(motifs_utilises))
+
+# 3. Identifier les cultures restantes
+cultures_autres <- setdiff(toutes_cultures, motifs_utilises)
+
+# 4. Créer le motif regex pour "Autres cultures"
+motif_autres <- paste(cultures_autres, collapse = "|")
+
+# 5. Appliquer la détection
+liste_pesticides_a_traiter$`Autres\ncultures` <- est_autorise_sur_culture(
+  liste_pesticides_a_traiter,
+  motif_autres,
+  df_complet = liste_pesticides
+)
+
   # on s'assure que toutes les colonnes de fonction sont de type character et non logical (cas où aucun usage n'est renseigné dans le tableau)
   convertir_logical_en_character <- function(df) {
     df[sapply(df, is.logical)] <- lapply(df[sapply(df, is.logical)], as.character)
@@ -137,45 +230,81 @@ liste_pesticides_a_traiter <- liste_pesticides %>%
   # Sélection et ordre des colonnes
   tableau_final <- liste_pesticides_a_traiter %>%
     dplyr::select(name_fr, Fonction,
-                  `Céréales à paille`, `Maïs`, `Oléagineux`, `Prairies`,
-                  `Fourrages`, `Pomme de terre`, `Betterave`, `Légumes`) %>%
+                  `Céréales\nà paille`, `Maïs`, `Oléagineux`, `Prairies`,
+                  `Fourrages`, `Pomme\nde terre`, `Betterave`, `Légumes`, 
+                  `Vignes`, `Autres\ncultures`) %>%
     dplyr::rename(Substance = name_fr) %>%
     dplyr::distinct()%>%
     dplyr::mutate(dplyr::across(everything(), as.character)) %>%
     dplyr::mutate(dplyr::across(everything(), ~tidyr::replace_na(.x, "")))
   
 
-  # Création du tableau graphique avec couleurs conditionnelles
-  
-  tableau_grob <- gridExtra::tableGrob(tableau_final, 
-                                       rows = NULL, 
-                                       theme = gridExtra::ttheme_default(
-    core = list(fg_params = list(cex = 0.8)),
-    colhead = list(fg_params = list(cex = 0.8, rot = 45))
-  ))
-  
-  
-  # Extraire les données à colorer (colonnes 3 à n)
-valeurs <- tableau_final[, 3:ncol(tableau_final)]
 
-# Créer une matrice de couleurs
+if (length(cultures_a_exclure) > 0) {
+  # Vérifier que les cultures à exclure existent dans le tableau
+  cultures_valides <- cultures_a_exclure[cultures_a_exclure %in% names(tableau_final)]
+
+  if (length(cultures_valides) > 0) {
+    # Extraire les colonnes à fusionner
+    fusion_data <- tableau_final[, c(cultures_valides, "Autres\ncultures")]
+
+    # Fonction d'agrégation
+    fusionner_statuts <- function(vals) {
+      if ("oui" %in% vals) return("oui")
+      if ("variant" %in% vals) return("variant")
+      if ("non" %in% vals) return("non")
+      return("")
+    }
+
+    # Appliquer la fusion ligne par ligne
+    tableau_final$`Autres\ncultures` <- apply(fusion_data, 1, fusionner_statuts)
+
+    # Supprimer les colonnes fusionnées
+    tableau_final <- tableau_final[, !(names(tableau_final) %in% cultures_valides)]
+  }
+}  
+
+  # 1. Créer la version avec symboles
+remplacer_par_symboles <- function(x) {
+  dplyr::case_when(
+    x == "oui" ~ "X",       
+    x == "non" ~ "-",       
+    x == "variant" ~ "!",   
+    TRUE ~ ""
+  )
+}
+
+
+tableau_final_symbole <- tableau_final
+tableau_final_symbole[, 3:ncol(tableau_final_symbole)] <- lapply(
+  tableau_final_symbole[, 3:ncol(tableau_final_symbole)],
+  remplacer_par_symboles
+)
+
+# 2. Créer le tableau graphique avec les symboles
+tableau_grob <- gridExtra::tableGrob(tableau_final_symbole, 
+                                     rows = NULL, 
+                                     theme = gridExtra::ttheme_default(
+                                       core = list(fg_params = list(cex = 0.8)),
+                                       colhead = list(fg_params = list(cex = 0.8, rot = 45))
+                                     ))
+
+# 3. Créer la matrice de couleurs à partir des valeurs originales
+valeurs <- tableau_final[, 3:ncol(tableau_final)]
 couleurs <- apply(valeurs, c(1, 2), function(val) {
   if (is.na(val) || val == "") return("white")
   if (val == "oui") return("darkgreen")
   if (val == "non") return("red")
-  if (val == "variant") return("orange")  # ou une autre couleur distinctive
+  if (val == "variant") return("orange")
   return("white")
 })
-  
 
+# 4. Appliquer les couleurs
 layout <- tableau_grob$layout
-
 for (i in seq_len(nrow(couleurs))) {
   for (j in seq_len(ncol(couleurs))) {
-    # Indices dans layout (décalage de +1 pour les lignes à cause des en-têtes)
     row_idx <- i + 1
-    col_idx <- j + 2  # car Substance et Fonction sont les deux premières colonnes
-
+    col_idx <- j + 2
     cell_bg <- which(layout$t == row_idx & layout$l == col_idx & grepl("core-bg", layout$name))
     if (length(cell_bg) == 1) {
       tableau_grob$grobs[[cell_bg]]$gp <- grid::gpar(fill = couleurs[i, j], col = NA)
@@ -183,9 +312,35 @@ for (i in seq_len(nrow(couleurs))) {
   }
 }
 
-  grid::grid.newpage()
-tableau_grob<-grid::grid.draw(tableau_grob)
-  
+# 5. Afficher
+grid::grid.newpage()
+# Créer la légende
+legende <- grid::textGrob(
+  "X : autorisé | - : interdit | ! : molécule interdite mais un variant autorisé | en blanc : jamais autorisé",
+  gp = grid::gpar(fontsize = 10, fontface = "italic"),
+  just = "center"
+)
+
+legende_cote <- grid::textGrob(
+  "X : autorisé\n\n- : interdit\n\n! : molécule interdite mais\nun variant autorisé\n\nen blanc : jamais autorisé",
+  gp = grid::gpar(fontsize = 10, fontface = "italic"),
+  just = "center"
+)
+
+# Afficher selon la position choisie
+grid::grid.newpage()
+tableau_grob<-if (legend_position == "top") {
+  gridExtra::grid.arrange(legende, tableau_grob, ncol = 1, heights = c(1, 10))
+} else if (legend_position == "bottom") {
+  gridExtra::grid.arrange(tableau_grob, legende, ncol = 1, heights = c(10, 1))
+} else if (legend_position == "left") {
+  gridExtra::grid.arrange(legende_cote, tableau_grob, nrow = 1, widths = c(2, 10))
+} else if (legend_position == "right") {
+  gridExtra::grid.arrange(tableau_grob, legende_cote, nrow = 1, widths = c(10, 2))
+} else {
+  grid::grid.draw(tableau_grob)  # fallback si position inconnue
+}
+
   return(tableau_grob)
 }
 

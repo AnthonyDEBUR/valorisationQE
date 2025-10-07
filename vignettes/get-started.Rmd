@@ -242,12 +242,14 @@ analyse_fonctions_pesticides(data,
   
   
 ```{r example-fiche_usages_pesticides}
-#| fig.width: 10.0
+#| fig.width: 14.0
 
 ref_pestibase <- importe_ref_pestibase()
 
-fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
-                                        liste_pesticides=ref_pestibase$liste_pesticides)
+fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678", "1859"),
+                                        liste_pesticides=ref_pestibase$liste_pesticides,
+                        legend_position = "top",
+                        cultures_a_exclure=c("Vignes", "Fourrages"))
 
 
 ```

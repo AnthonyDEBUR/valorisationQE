@@ -5,7 +5,12 @@
 \title{fiche_usages_pesticides
 Génère un tableau graphique des usages autorisés ou interdits des pesticides par culture}
 \usage{
-fiche_usages_pesticides(liste_cd_sandre, liste_pesticides)
+fiche_usages_pesticides(
+  liste_cd_sandre,
+  liste_pesticides,
+  legend_position = "bottom",
+  cultures_a_exclure = c()
+)
 }
 \arguments{
 \item{liste_cd_sandre}{Character vector. Liste des codes SANDRE des masses d'eau pour lesquelles on souhaite afficher les usages.}
@@ -18,7 +23,25 @@ fiche_usages_pesticides(liste_cd_sandre, liste_pesticides)
 \item \code{function_finale} : fonction associée à la substance
 \item \code{has_authorized_oepp_culture} : texte décrivant les cultures pour lesquelles la substance est autorisée
 \item \code{has_removed_authorized_oepp_culture} : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
-\item \code{has_variant} : texte listan les identifiants pestibases de variants
+\item \code{has_variant} : texte listant les identifiants pestibase de variants
+}}
+
+\item{legend_position}{Character. Position de la légende dans le tableau graphique. Valeurs possibles : \code{"top"}, \code{"bottom"}, \code{"left"}, \code{"right"}.}
+
+\item{cultures_a_exclure}{Character vector. Liste des cultures à regrouper dans la catégorie "Autres cultures".
+Les noms doivent correspondre aux intitulés des colonnes du tableau. Les éventuels sauts de ligne (\code{"\\n"}) dans les noms de colonnes sont automatiquement convertis en espace.
+Les noms valides sont :
+\itemize{
+\item \code{"Céréales à paille"}
+\item \code{"Maïs"}
+\item \code{"Oléagineux"}
+\item \code{"Prairies"}
+\item \code{"Fourrages"}
+\item \code{"Pomme de terre"}
+\item \code{"Betterave"}
+\item \code{"Légumes"}
+\item \code{"Vignes"}
+\item \code{"Traitements généraux"}
 }}
 }
 \value{
@@ -27,19 +50,34 @@ Ce tableau peut être affiché avec \code{grid::grid.draw()}.
 }
 \description{
 Cette fonction permet de visualiser, sous forme de tableau coloré, les usages des substances actives
-(pesticides) selon leur statut réglementaire : autorisé, interdit ou jamais autorisé, pour différentes cultures.
+(pesticides) selon leur statut réglementaire : autorisé, interdit, variant ou jamais autorisé, pour différentes cultures.
 Les couleurs indiquent :
 \itemize{
 \item \strong{vert} : la substance est actuellement autorisée sur la culture
 \item \strong{rouge} : la substance a été retirée de l'autorisation
+\item \strong{orange} : la substance n'est pas autorisée mais un de ses variants l'est
 \item \strong{blanc} : la substance n'a jamais été autorisée sur la culture
 }
+}
+\details{
+Lorsque des cultures sont regroupées dans "Autres cultures", les statuts sont agrégés selon les règles suivantes :
+\itemize{
+\item Si au moins une culture est \code{"oui"} alors le statut devient \code{"oui"}
+\item Sinon, si au moins une culture est \code{"variant"} alors le statut devient \code{"variant"}
+\item Sinon, si au moins une culture est \code{"non"} alors le statut devient \code{"non"}
+\item Sinon → le statut reste vide
+}
+
+Exemple : le Diméthénamide n'est plus autorisé sur certaines cultures, mais son variant Diméthénamide-P l'est encore.
+Dans ce cas, le statut affiché est \code{"variant"} pour les cultures concernées.
 }
 \examples{
 ref_pestibase <- importe_ref_pestibase()
 
-fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
-                                        liste_pesticides=ref_pestibase$liste_pesticides)
+fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678", "1859"),
+                                        liste_pesticides=ref_pestibase$liste_pesticides,
+                        legend_position = "top",
+                        cultures_a_exclure=c("Vignes", "Fourrages"))
 
 
 }
