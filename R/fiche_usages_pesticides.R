@@ -13,10 +13,12 @@
 #' @param liste_cd_sandre Character vector. Liste des codes SANDRE des masses d'eau pour lesquelles on souhaite afficher les usages.
 #' @param liste_pesticides Data frame. Issu de la fonction `importe_ref_pestibase`, contenant au minimum les colonnes :
 #' - `SA_CodeSANDRE` : code SANDRE de la masse d'eau
+#' - `id` : identifiant pestibase de la substance
 #' - `name_fr` : nom de la substance active
 #' - `function_finale` : fonction associée à la substance
 #' - `has_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles la substance est autorisée
 #' - `has_removed_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
+#' - `has_variant` : texte listan les identifiants pestibases de variants
 #'
 #' @return Un objet graphique de type `grob` représentant un tableau coloré des usages par culture.
 #' Ce tableau peut être affiché avec `grid::grid.draw()`.
@@ -25,7 +27,7 @@
 #' @examples
 #' ref_pestibase <- importe_ref_pestibase()
 #'
-#' fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817"),
+#' fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
 #'                                         liste_pesticides=ref_pestibase$liste_pesticides)
 #'
 #'
@@ -33,36 +35,96 @@ fiche_usages_pesticides <- function(liste_cd_sandre,
                                     liste_pesticides) {
 
   
-    # Fonction logique oui/non
-est_autorise_sur_culture <- function(aut, interd, motif) {
-  aut <- ifelse(is.na(aut), "", aut)
-  interd <- ifelse(is.na(interd), "", interd)
-  
-  aut_detect <- stringr::str_detect(aut, motif)
-  interd_detect <- stringr::str_detect(interd, motif)
-  
-  dplyr::case_when(
-    aut_detect ~ "oui",
-    interd_detect ~ "non",
-    TRUE ~ NA_character_
-  )
+    # Fonction détectant si la substance est autorisée sur une culture
+est_autorise_sur_culture <- function(aut, interd, motif, variants, df_pesticides) {
+  mapply(function(a, i, v) {
+    a <- ifelse(is.na(a), "", a)
+    i <- ifelse(is.na(i), "", i)
+    v <- ifelse(is.na(v), "", v)
+
+    aut_detect <- stringr::str_detect(a, motif)
+    interd_detect <- stringr::str_detect(i, motif)
+
+    variant_detect <- FALSE
+    if (v != "") {
+      variant_ids <- unlist(strsplit(v, ","))
+      variant_infos <- df_pesticides[df_pesticides$id %in% variant_ids, ]
+      variant_detect <- any(stringr::str_detect(variant_infos$has_authorized_oepp_culture, motif))
+    }
+
+    dplyr::case_when(
+      aut_detect ~ "oui",
+      !aut_detect & variant_detect ~ "variant",
+      interd_detect ~ "non",
+      TRUE ~ NA_character_
+    )
+  }, aut, interd, variants, SIMPLIFY = TRUE)
 }
 
   # 
-  liste_pesticides_a_traiter <- liste_pesticides %>%
-    dplyr::mutate(SA_CodeSANDRE = factor(SA_CodeSANDRE, levels = liste_cd_sandre)) %>%
-    dplyr::arrange(SA_CodeSANDRE) %>%
-    dplyr::mutate(
-      Fonction = liste_pesticides$function_finale,
-      `Céréales à paille` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales"),
-      `Maïs` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Maïs"),
-      `Oléagineux` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Arachide|Chanvre|Crucifères|Soja|Tournesol"),
-      `Prairies` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Prairie"),
-      `Fourrages` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Fourragères|Prairies"),
-      `Pomme de terre` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Pomme de terre"),
-      `Betterave` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Betterave"),
-      `Légumes` = est_autorise_sur_culture(has_authorized_oepp_culture, has_removed_authorized_oepp_culture, "Artichaut|Asperge|Carotte|Céleri|Chicorée|Choux|Cresson|Cucurbitacées|Epinard|Haricot|Laitue|Navet|Oignon|Poireau|Pois|Poivron|Salsifis|Tomate|Aubergine|Légumes")
-    )%>%subset(SA_CodeSANDRE%in%liste_cd_sandre)
+liste_pesticides_a_traiter <- liste_pesticides %>%
+  dplyr::mutate(SA_CodeSANDRE = factor(SA_CodeSANDRE, levels = liste_cd_sandre)) %>%
+  dplyr::arrange(SA_CodeSANDRE) %>%
+  dplyr::mutate(
+    Fonction = function_finale,
+    `Céréales à paille` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales",
+      has_variant,
+      liste_pesticides
+    ),
+    `Maïs` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Maïs",
+      has_variant,
+      liste_pesticides
+    ),
+    `Oléagineux` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Arachide|Chanvre|Crucifères|Soja|Tournesol",
+      has_variant,
+      liste_pesticides
+    ),
+    `Prairies` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Prairie",
+      has_variant,
+      liste_pesticides
+    ),
+    `Fourrages` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Fourragères|Prairies",
+      has_variant,
+      liste_pesticides
+    ),
+    `Pomme de terre` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Pomme de terre",
+      has_variant,
+      liste_pesticides
+    ),
+    `Betterave` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Betterave",
+      has_variant,
+      liste_pesticides
+    ),
+    `Légumes` = est_autorise_sur_culture(
+      has_authorized_oepp_culture,
+      has_removed_authorized_oepp_culture,
+      "Artichaut|Asperge|Carotte|Céleri|Chicorée|Choux|Cresson|Cucurbitacées|Epinard|Haricot|Laitue|Navet|Oignon|Poireau|Pois|Poivron|Salsifis|Tomate|Aubergine|Légumes",
+      has_variant,
+      liste_pesticides
+    )
+  ) %>%
+  subset(SA_CodeSANDRE %in% liste_cd_sandre)
   
   # on s'assure que toutes les colonnes de fonction sont de type character et non logical (cas où aucun usage n'est renseigné dans le tableau)
   convertir_logical_en_character <- function(df) {
@@ -101,6 +163,7 @@ couleurs <- apply(valeurs, c(1, 2), function(val) {
   if (is.na(val) || val == "") return("white")
   if (val == "oui") return("darkgreen")
   if (val == "non") return("red")
+  if (val == "variant") return("orange")  # ou une autre couleur distinctive
   return("white")
 })
   

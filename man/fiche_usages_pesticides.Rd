@@ -13,10 +13,12 @@ fiche_usages_pesticides(liste_cd_sandre, liste_pesticides)
 \item{liste_pesticides}{Data frame. Issu de la fonction \code{importe_ref_pestibase}, contenant au minimum les colonnes :
 \itemize{
 \item \code{SA_CodeSANDRE} : code SANDRE de la masse d'eau
+\item \code{id} : identifiant pestibase de la substance
 \item \code{name_fr} : nom de la substance active
 \item \code{function_finale} : fonction associée à la substance
 \item \code{has_authorized_oepp_culture} : texte décrivant les cultures pour lesquelles la substance est autorisée
 \item \code{has_removed_authorized_oepp_culture} : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
+\item \code{has_variant} : texte listan les identifiants pestibases de variants
 }}
 }
 \value{
@@ -36,7 +38,7 @@ Les couleurs indiquent :
 \examples{
 ref_pestibase <- importe_ref_pestibase()
 
-fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817"),
+fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
                                         liste_pesticides=ref_pestibase$liste_pesticides)
 
 

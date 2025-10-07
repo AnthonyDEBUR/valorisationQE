@@ -242,9 +242,11 @@ analyse_fonctions_pesticides(data,
   
   
 ```{r example-fiche_usages_pesticides}
+#| fig.width: 10.0
+
 ref_pestibase <- importe_ref_pestibase()
 
-fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817"),
+fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678"),
                                         liste_pesticides=ref_pestibase$liste_pesticides)
 
 

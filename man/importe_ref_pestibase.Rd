@@ -16,7 +16,9 @@ Une liste nommée contenant les éléments suivants :
 \item{liste_phytos}{Substances identifiées comme phytosanitaires
 (autorisées ou non).}
 \item{liste_phytos_autorises}{Phytosanitaires actuellement autorisés,
-y compris les variantes associées.}
+y compris les variantes associées (ex. le Diméthénamide figure dans
+cette liste car le Diméthénamide-P est autorisé et sa mesure est inclue
+dans celle du Diméthénamide.}
 \item{liste_phytos_non_autorises}{Phytosanitaires ayant été autorisés mais
 ne l'étant plus.}
 \item{liste_metabolites}{Ensemble des métabolites de pesticides
