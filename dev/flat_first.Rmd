@@ -1401,7 +1401,7 @@ test_that("analyse_fonctions_pesticides works", {
 #' - `has_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles la substance est autorisée
 #' - `has_removed_authorized_oepp_culture` : texte décrivant les cultures pour lesquelles l'autorisation a été retirée
 #' - `has_variant` : texte listant les identifiants pestibase de variants
-#' @param legend_position Character. Position de la légende dans le tableau graphique. Valeurs possibles : `"top"`, `"bottom"`, `"left"`, `"right"`.
+#' @param legend_position Character. Position de la légende dans le tableau graphique. Valeurs possibles : `"top"`, `"bottom"`, `"left"`, `"right"`, `"none"`.
 #' @param cultures_a_exclure Character vector. Liste des cultures à regrouper dans la catégorie "Autres cultures".
 #' Les noms doivent correspondre aux intitulés des colonnes du tableau. Les éventuels sauts de ligne (`"\n"`) dans les noms de colonnes sont automatiquement convertis en espace.
 #' Les noms valides sont :
@@ -1420,13 +1420,13 @@ test_that("analyse_fonctions_pesticides works", {
 #'
 #' @details
 #' Lorsque des cultures sont regroupées dans "Autres cultures", les statuts sont agrégés selon les règles suivantes :
-#' - Si au moins une culture est `"oui"` alors le statut devient `"oui"`
-#' - Sinon, si au moins une culture est `"variant"` alors le statut devient `"variant"`
-#' - Sinon, si au moins une culture est `"non"` alors le statut devient `"non"`
-#' - Sinon → le statut reste vide
+#' - Si au moins une culture est `"autorisée"` alors le statut devient `"autorisé"`
+#' - Sinon, si au moins une culture a `"un variant autorisé"` alors le statut devient `"variant autorisé"`
+#' - Sinon, si au moins une culture est `"interdite"` alors le statut devient `"interdit"`
+#' - Sinon le statut reste vide
 #'
 #' Exemple : le Diméthénamide n'est plus autorisé sur certaines cultures, mais son variant Diméthénamide-P l'est encore.
-#' Dans ce cas, le statut affiché est `"variant"` pour les cultures concernées.
+#' Dans ce cas, le statut affiché est `"variant autorisé"` pour les cultures concernées.
 #'
 #' @return Un objet graphique de type `grob` représentant un tableau coloré des usages par culture.
 #' Ce tableau peut être affiché avec `grid::grid.draw()`.
@@ -1479,7 +1479,7 @@ if (!is.character(legend_position) || length(legend_position) != 1) {
 }
 
 # Vérification de la valeur de legend_position
-positions_valides <- c("top", "bottom", "left", "right")
+positions_valides <- c("top", "bottom", "left", "right", "none")
 if (!legend_position %in% positions_valides) {
   warning("Attention : la valeur de 'legend_position' ('", legend_position, "') n'est pas reconnue. ",
           "Les valeurs acceptées sont : ", paste(positions_valides, collapse = ", "), 
@@ -1499,6 +1499,7 @@ normaliser_nom_culture <- function(nom) {
     nom == "Céréales à paille" ~ "Céréales\nà paille",
     nom == "Pomme de terre" ~ "Pomme\nde terre",
     nom == "Autres cultures" ~ "Autres\ncultures",
+    nom== "Traitements généraux" ~ "Traitements\ngénéraux",
     TRUE ~ nom  # les autres noms ne contiennent pas de \n
   )
 }
@@ -1600,11 +1601,11 @@ liste_pesticides_a_traiter$`Autres\ncultures` <- est_autorise_sur_culture(
   liste_pesticides_a_traiter <- convertir_logical_en_character(liste_pesticides_a_traiter)
   
   # Sélection et ordre des colonnes
+ 
   tableau_final <- liste_pesticides_a_traiter %>%
     dplyr::select(name_fr, Fonction,
-                  `Céréales\nà paille`, `Maïs`, `Oléagineux`, `Prairies`,
-                  `Fourrages`, `Pomme\nde terre`, `Betterave`, `Légumes`, 
-                  `Vignes`, `Autres\ncultures`) %>%
+                  dplyr::all_of(cultures_connues),
+                  `Autres\ncultures`) %>%
     dplyr::rename(Substance = name_fr) %>%
     dplyr::distinct()%>%
     dplyr::mutate(dplyr::across(everything(), as.character)) %>%
@@ -1710,7 +1711,7 @@ tableau_grob<-if (legend_position == "top") {
 } else if (legend_position == "right") {
   gridExtra::grid.arrange(tableau_grob, legende_cote, nrow = 1, widths = c(10, 2))
 } else {
-  grid::grid.draw(tableau_grob)  # fallback si position inconnue
+  grid::grid.draw(tableau_grob)  # si position none
 }
 
   return(tableau_grob)

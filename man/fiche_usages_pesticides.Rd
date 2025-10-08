@@ -26,7 +26,7 @@ fiche_usages_pesticides(
 \item \code{has_variant} : texte listant les identifiants pestibase de variants
 }}
 
-\item{legend_position}{Character. Position de la légende dans le tableau graphique. Valeurs possibles : \code{"top"}, \code{"bottom"}, \code{"left"}, \code{"right"}.}
+\item{legend_position}{Character. Position de la légende dans le tableau graphique. Valeurs possibles : \code{"top"}, \code{"bottom"}, \code{"left"}, \code{"right"}, \code{"none"}.}
 
 \item{cultures_a_exclure}{Character vector. Liste des cultures à regrouper dans la catégorie "Autres cultures".
 Les noms doivent correspondre aux intitulés des colonnes du tableau. Les éventuels sauts de ligne (\code{"\\n"}) dans les noms de colonnes sont automatiquement convertis en espace.
@@ -62,14 +62,14 @@ Les couleurs indiquent :
 \details{
 Lorsque des cultures sont regroupées dans "Autres cultures", les statuts sont agrégés selon les règles suivantes :
 \itemize{
-\item Si au moins une culture est \code{"oui"} alors le statut devient \code{"oui"}
-\item Sinon, si au moins une culture est \code{"variant"} alors le statut devient \code{"variant"}
-\item Sinon, si au moins une culture est \code{"non"} alors le statut devient \code{"non"}
-\item Sinon → le statut reste vide
+\item Si au moins une culture est \code{"autorisée"} alors le statut devient \code{"autorisé"}
+\item Sinon, si au moins une culture a \code{"un variant autorisé"} alors le statut devient \code{"variant autorisé"}
+\item Sinon, si au moins une culture est \code{"interdite"} alors le statut devient \code{"interdit"}
+\item Sinon le statut reste vide
 }
 
 Exemple : le Diméthénamide n'est plus autorisé sur certaines cultures, mais son variant Diméthénamide-P l'est encore.
-Dans ce cas, le statut affiché est \code{"variant"} pour les cultures concernées.
+Dans ce cas, le statut affiché est \code{"variant autorisé"} pour les cultures concernées.
 }
 \examples{
 ref_pestibase <- importe_ref_pestibase()
