@@ -66,6 +66,8 @@ fiche_usages_pesticides <- function(liste_cd_sandre,
                                     cultures_a_exclure = c()) {
 
   
+  liste_cd_sandre<-unique(liste_cd_sandre)
+  
   # Dictionnaire des cultures et motifs
 cultures_motifs <- list(
   `Céréales\nà paille` = "Avoine|Blé|Orge|Riz|Sarrasin|Seigle|Céréales",
@@ -80,8 +82,6 @@ cultures_motifs <- list(
   `Traitements\ngénéraux` = "Traitements généraux"
 )
 
-  
-  
 # Vérification du type de liste_cd_sandre
 if (!is.character(liste_cd_sandre)) {
   stop("Erreur : 'liste_cd_sandre' doit être un vecteur de caractères (character vector).")

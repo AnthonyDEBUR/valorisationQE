@@ -128,10 +128,16 @@ new_ref_oeb<- tryCatch(
 # LISTE DES METABOLITES
 # Extraire les ids des deux tableaux
 id_metabolites <- unlist(stringr::str_split(new_ref_oeb$has_metabolite, "\\|"))
+
+new_ref_oeb<-
+  new_ref_oeb%>%
+  dplyr::mutate(function_finale=ifelse(is.na(function_finale) & id%in%id_metabolites, 
+                                   "métabolite",
+                                   function_finale))
+
 liste_metabolites <- new_ref_oeb %>%   
   filter(id %in% id_metabolites)%>% 
   dplyr::mutate(type="métabolites")
-
 
 # listes phytos autorisés ou interdits
 liste_phytos<-new_ref_oeb%>%
