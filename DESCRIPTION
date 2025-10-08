@@ -20,6 +20,7 @@ Imports:
     meteo4Vilaine,
     raster,
     readr,
+    scales,
     sf,
     stringr,
     tidyr

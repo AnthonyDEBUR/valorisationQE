@@ -1719,7 +1719,7 @@ tableau_grob<-if (legend_position == "top") {
 
 ```
   
-```{r example-fiche_usages_pesticides, fig.width=14}
+```{r example-fiche_usages_pesticides, fig.width=12}
 ref_pestibase <- importe_ref_pestibase()
 
 fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617", "1678", "1859"),
@@ -1736,7 +1736,129 @@ test_that("fiche_usages_pesticides works", {
 })
 ```
   
+# heatmap_substances
+    
+```{r development-heatmap_substances}
+# You can prepare the code of the heatmap_substances() function here
+```
+  
+```{r function-heatmap_substances}
+#' heatmap_substances
+#' 
+#' Génère une heatmap des substances quantifiées au-delà d’un seuil
+#'
+#' Cette fonction crée une heatmap des concentrations de substances (ex. : 
+#' pesticides)
+#' mesurées dans différentes stations, en mettant en évidence celles dont les 
+#' valeurs dépassent un seuil donné.
+#' Le gradient de couleur est personnalisable selon les seuils définis.
+#'
+#' @param df Data frame contenant les résultats d’analyses.
+#' @param col_station Nom de la colonne contenant les codes des stations. 
+#' Défaut : `"CdStationMesureEauxSurface"`.
+#' @param col_param Nom de la colonne contenant les noms des substances ou 
+#' paramètres. Défaut : `"NomParametre"`.
+#' @param col_result Nom de la colonne contenant les résultats d’analyse. 
+#' Défaut : `"RsAna"`.
+#' @param col_remarque Nom de la colonne contenant les codes de remarque. 
+#' Défaut : `"CdRqAna"`.
+#' @param titre Titre du graphique. Défaut : `"Substances quantifiées au-delà 
+#' du seuil"`.
+#' @param seuil_bas Seuil inférieur du gradient de couleur (début du jaune). 
+#' Défaut : `0.1`.
+#' @param seuil_haut Seuil supérieur du gradient de couleur (début du rouge). 
+#' Défaut : `2`.
+#' @param chiffres_significatifs Nombre de chiffres significatifs à afficher 
+#' dans les cases. Défaut : `2`.
+#'
+#' @return Un objet ggplot représentant la heatmap.
+#' 
+#' @export
 
+heatmap_substances <- function(
+  df,
+  col_station = "CdStationMesureEauxSurface",
+  col_param = "NomParametre",
+  col_result = "RsAna",
+  col_remarque = "CdRqAna",
+  titre = "Substances quantifiées au-delà du seuil",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs = 2
+) {
+  # Étape 1 : identifier les substances quantifiées au-delà du seuil_bas avec CdRqAna == "1"
+  substances_significatives <- df %>%
+    dplyr::filter(.data[[col_remarque]] == "1", .data[[col_result]] > seuil_bas) %>%
+    dplyr::distinct(.data[[col_param]])
+  
+  # Étape 2 : récupérer toutes les lignes pour ces substances
+  donnees_heatmap <- df %>%
+    dplyr::filter(.data[[col_param]] %in% substances_significatives[[col_param]] & .data[[col_remarque]] == "1")
+  
+  # Étape 3 : créer le gradient de couleur personnalisé
+  gradient_colors <- ggplot2::scale_fill_gradientn(
+    colours = c("lightblue", "yellow", "red", "purple"),
+    values = scales::rescale(c(0, seuil_bas, seuil_haut, max(donnees_heatmap[[col_result]], na.rm = TRUE))),
+    name = "(µg/L)"
+  )
+  
+  # Étape 4 : créer le graphique
+  g <- ggplot2::ggplot(donnees_heatmap, 
+                       ggplot2::aes(x = .data[[col_station]], 
+                                    y = .data[[col_param]], 
+                                    fill = .data[[col_result]])) +
+    ggplot2::geom_tile(color = "white") +
+    ggplot2::geom_text(ggplot2::aes(label = round(.data[[col_result]], chiffres_significatifs)), 
+                       size = 3, 
+                       color = "black") +
+    gradient_colors +
+    ggplot2::labs(title = titre, x = "", y = "") +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  
+  return(g)
+}
+```
+  
+```{r example-heatmap_substances, fig.width=10}
+
+
+# Définition des stations
+stations <- c("04123456", "04345678", "04987654", "04246810")
+
+# Définition des pesticides courants en France
+pesticides <- c(
+  "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
+  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
+  "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+)
+
+# Génération du jeu de données
+set.seed(123)  # Pour reproductibilité
+df_fictif <- expand.grid(CdStationMesureEauxSurface = stations, NomParametre = pesticides) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    RsAna = round(runif(1, 0, 1), 2),
+    CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+  ) %>%
+  dplyr::ungroup()
+
+
+heatmap_substances(
+  df = df_fictif,
+  titre = "Substances quantifiées > 0.1 µg/L",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs=2
+)
+```
+  
+```{r tests-heatmap_substances}
+test_that("heatmap_substances works", {
+  expect_true(inherits(heatmap_substances, "function")) 
+})
+```
+  
 
 ```{r development-inflate, eval=FALSE}
 # Keep eval=FALSE to avoid infinite loop in case you hit the knit button

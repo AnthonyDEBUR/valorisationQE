@@ -242,7 +242,7 @@ analyse_fonctions_pesticides(data,
   
   
 ```{r example-fiche_usages_pesticides}
-#| fig.width: 14.0
+#| fig.width: 12.0
 
 ref_pestibase <- importe_ref_pestibase()
 
@@ -256,7 +256,47 @@ fiche_usages_pesticides(liste_cd_sandre=c("2009", "1221", "1882", "5817", "5617"
 
   
   
+# heatmap_substances
+    
+  
+  
+```{r example-heatmap_substances}
+#| fig.width: 10.0
 
+
+
+# Définition des stations
+stations <- c("04123456", "04345678", "04987654", "04246810")
+
+# Définition des pesticides courants en France
+pesticides <- c(
+  "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
+  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
+  "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+)
+
+# Génération du jeu de données
+set.seed(123)  # Pour reproductibilité
+df_fictif <- expand.grid(CdStationMesureEauxSurface = stations, NomParametre = pesticides) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    RsAna = round(runif(1, 0, 1), 2),
+    CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+  ) %>%
+  dplyr::ungroup()
+
+
+heatmap_substances(
+  df = df_fictif,
+  titre = "Substances quantifiées > 0.1 µg/L",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs=2
+)
+```
+
+  
+  
 
 
 # Inflate your package
