@@ -142,9 +142,7 @@ knitr::include_graphics(system.file("extdata", "graph_pluvio.png", package = "va
 ```
 
 # f_fond_de_carte
-    
 
-  
 ```{r function-f_fond_de_carte}
 #' f_fond_de_carte
 #' 
@@ -254,7 +252,7 @@ test_that("f_fond_de_carte works", {
 #' est un vecteur dont la première valeur est le nom de la colonne de shp_staq 
 #' et la deuxième celle de data_carte
 #' @param col_valeurs Nom de la colonne contenant les valeurs de concentration à
-#' utiliser (par défaut `"Somme"`).
+#' utiliser (par défaut `"RsAna"`).
 #' @param titre Titre principal de la carte (par défaut `"Bilan des concentrations en pesticides"`).
 #' @param sous_titre Sous-titre de la carte.
 #' @param breaks Vecteur numérique définissant les seuils de classes de 
@@ -295,7 +293,7 @@ f_cartographie_concentrations <-function(fond_carte,
                                          shp_staq,
                          data_carte,
                          col_stations="CdStationMesureEauxSurface",
-                         col_valeurs="Somme",
+                         col_valeurs="RsAna",
                          titre="Bilan des concentrations en pesticides",
                          sous_titre="Date de la campagne",
                          breaks=c(0, 0.5, 2, Inf),
@@ -1859,6 +1857,98 @@ test_that("heatmap_substances works", {
 })
 ```
   
+# ajoute_coursdeau
+    
+
+```{r function-ajoute_coursdeau}
+#' ajoute_coursdeau
+#'
+#' Ajoute une couche de cours d'eau filtrée spatialement à un ggplot
+#'
+#' @param shp Objet sf utilisé pour filtrer spatialement
+#' @param con Connexion DBI à la base PostGIS
+#' @param schema Nom du schéma PostGIS
+#' @param table Nom de la table PostGIS
+#' @param color Couleur du tracé
+#' @param size Épaisseur du tracé
+#'
+#' @return Un layer ggplot2::geom_sf
+#' 
+#' @export
+ajoute_coursdeau <- function(shp, 
+                             con, 
+                             schema = "r400_cours_deau", 
+                             table = "ice_vilaine",
+                             color = "blue", 
+                             size = 0.8) {
+  query <- paste0("SELECT * FROM ", schema, ".", table)
+  vilaine <- sf::st_read(con, query = query)
+  vilaine <- sf::st_zm(vilaine)
+  vilaine <- sf::st_transform(vilaine, sf::st_crs(shp))
+  vilaine_filtre <- sf::st_intersection(vilaine, shp)
+  ggplot2::geom_sf(data = vilaine_filtre, fill = "transparent", color = color, size = size)
+}
+
+```
+  
+```{r example-ajoute_coursdeau}
+
+
+if (interactive()) {
+  config_path <- "C://workspace//gwilenalim//yaml//config.yml"
+  if (file.exists(config_path)) {
+    library(RPostgres)
+    config <- yaml::read_yaml(config_path)
+    con <- tryCatch({
+      DBI::dbConnect(
+        RPostgres::Postgres(),
+        host = config$host,
+        port = config$port,
+        user = config$user,
+        password = config$password,
+        dbname = config$dbname
+      )
+    }, error = function(e) NULL)
+  
+    if (!is.null(con)) {
+       triangle_sf <- sf::st_sf(
+        geometry = sf::st_sfc(
+          sf::st_polygon(list(rbind(
+            c(-1.6794, 48.1147),  # Rennes
+            c(-1.2100, 48.1230),  # Vitré
+            c(-1.5025, 47.6833),  # Derval
+            c(-1.6794, 48.1147)   # Retour à Rennes
+          )))
+        ),
+        crs = 4326
+      )
+     
+     g<- f_fond_de_carte(triangle_sf, zoom = 9) +
+    ajoute_coursdeau(triangle_sf, con, size = 0.5)
+
+      DBI::dbDisconnect(con)
+      print(g)
+    } else {
+      message("Connexion à la base impossible, exemple non exécuté.")
+    }
+  } else {
+    message("Fichier de configuration introuvable.")
+  }
+}
+
+knitr::include_graphics(system.file("extdata", "graph_coursdeaubv.png", package = "valorisationQE"))
+
+```
+  
+```{r tests-ajoute_coursdeau}
+test_that("ajoute_coursdeau works", {
+  expect_true(inherits(ajoute_coursdeau, "function")) 
+})
+```
+  
+
+
+
 
 ```{r development-inflate, eval=FALSE}
 # Keep eval=FALSE to avoid infinite loop in case you hit the knit button

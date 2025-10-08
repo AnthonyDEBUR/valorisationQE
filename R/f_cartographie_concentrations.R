@@ -22,7 +22,7 @@
 #' est un vecteur dont la première valeur est le nom de la colonne de shp_staq 
 #' et la deuxième celle de data_carte
 #' @param col_valeurs Nom de la colonne contenant les valeurs de concentration à
-#' utiliser (par défaut `"Somme"`).
+#' utiliser (par défaut `"RsAna"`).
 #' @param titre Titre principal de la carte (par défaut `"Bilan des concentrations en pesticides"`).
 #' @param sous_titre Sous-titre de la carte.
 #' @param breaks Vecteur numérique définissant les seuils de classes de 
@@ -116,7 +116,7 @@ f_cartographie_concentrations <-function(fond_carte,
                                          shp_staq,
                          data_carte,
                          col_stations="CdStationMesureEauxSurface",
-                         col_valeurs="Somme",
+                         col_valeurs="RsAna",
                          titre="Bilan des concentrations en pesticides",
                          sous_titre="Date de la campagne",
                          breaks=c(0, 0.5, 2, Inf),

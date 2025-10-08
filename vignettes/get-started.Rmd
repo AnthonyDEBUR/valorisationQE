@@ -86,9 +86,6 @@ knitr::include_graphics(system.file("extdata", "graph_pluvio.png", package = "va
 
 
 # f_fond_de_carte
-    
-
-  
   
 ```{r example-f_fond_de_carte}
 
@@ -297,6 +294,63 @@ heatmap_substances(
 
   
   
+# ajoute_coursdeau
+    
+  
+```{r example-ajoute_coursdeau}
+
+
+if (interactive()) {
+  config_path <- "C://workspace//gwilenalim//yaml//config.yml"
+  if (file.exists(config_path)) {
+    library(RPostgres)
+    config <- yaml::read_yaml(config_path)
+    con <- tryCatch({
+      DBI::dbConnect(
+        RPostgres::Postgres(),
+        host = config$host,
+        port = config$port,
+        user = config$user,
+        password = config$password,
+        dbname = config$dbname
+      )
+    }, error = function(e) NULL)
+  
+    if (!is.null(con)) {
+       triangle_sf <- sf::st_sf(
+        geometry = sf::st_sfc(
+          sf::st_polygon(list(rbind(
+            c(-1.6794, 48.1147),  # Rennes
+            c(-1.2100, 48.1230),  # Vitré
+            c(-1.5025, 47.6833),  # Derval
+            c(-1.6794, 48.1147)   # Retour à Rennes
+          )))
+        ),
+        crs = 4326
+      )
+     
+     g<- f_fond_de_carte(triangle_sf, zoom = 9) +
+    ajoute_coursdeau(triangle_sf, con, size = 0.5)
+
+      DBI::dbDisconnect(con)
+      print(g)
+    } else {
+      message("Connexion à la base impossible, exemple non exécuté.")
+    }
+  } else {
+    message("Fichier de configuration introuvable.")
+  }
+}
+
+knitr::include_graphics(system.file("extdata", "graph_coursdeaubv.png", package = "valorisationQE"))
+
+```
+
+  
+  
+
+
+
 
 
 # Inflate your package
