@@ -18,6 +18,8 @@
 #' Par défaut `"CdParametre"`.
 #' @param liste_pesticides Data frame issu de la fonction `importe_ref_pestibase`, contenant
 #' les colonnes `SA_CodeSANDRE`, `function_bzh` et `function_fr` pour l'association des fonctions.
+#' @param police_axes Taille de la police de caractères dans les 
+#' axes Défaut : `12`.
 #'
 #' @return Un objet `ggplot` représentant la répartition des fonctions des substances
 #' pesticides quantifiées.
@@ -48,7 +50,8 @@
 analyse_fonctions_pesticides <- function(data, 
                                          code_remarque = "CdRqAna",
                                          code_parametre = "CdParametre",
-                                         liste_pesticides) {
+                                         liste_pesticides,
+                                         police_axes=12) {
   # Vérifications des paramètres
   if (!is.data.frame(data)) {
     stop("Le paramètre 'data' doit être un data.frame contenant les résultats analytiques.")
@@ -98,7 +101,9 @@ analyse_fonctions_pesticides <- function(data,
     ggplot2::labs(title = "Fonctions des substances quantifiées",
                   subtitle = "% de la concentration totale mesurée",
                   x = "", y = "%") +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal()+
+    ggplot2::theme(axis.text.x = ggplot2::element_text(size = police_axes),
+                           axis.text.y = ggplot2::element_text(size = police_axes))
 
   return(g)
 }

@@ -37,6 +37,9 @@
 #'   \item `"Traitements généraux"`
 #' }
 #'
+#' @param police_etiquettes Taille de la police de caractères dans les 
+#' étiquettes. Défaut : `1`.
+#'
 #' @details
 #' Lorsque des cultures sont regroupées dans "Autres cultures", les statuts sont agrégés selon les règles suivantes :
 #' - Si au moins une culture est `"autorisée"` alors le statut devient `"autorisé"`
@@ -63,7 +66,8 @@
 fiche_usages_pesticides <- function(liste_cd_sandre, 
                                     liste_pesticides,
                                     legend_position = "bottom",
-                                    cultures_a_exclure = c()) {
+                                    cultures_a_exclure = c(),
+                                    police_etiquettes=1) {
 
   
   liste_cd_sandre<-unique(liste_cd_sandre)
@@ -286,8 +290,8 @@ tableau_final_symbole[, 3:ncol(tableau_final_symbole)] <- lapply(
 tableau_grob <- gridExtra::tableGrob(tableau_final_symbole, 
                                      rows = NULL, 
                                      theme = gridExtra::ttheme_default(
-                                       core = list(fg_params = list(cex = 0.8)),
-                                       colhead = list(fg_params = list(cex = 0.8, rot = 45))
+                                       core = list(fg_params = list(cex = police_etiquettes)),
+                                       colhead = list(fg_params = list(cex = police_etiquettes, rot = 45))
                                      ))
 
 # 3. Créer la matrice de couleurs à partir des valeurs originales

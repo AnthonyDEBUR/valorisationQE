@@ -9,7 +9,8 @@ fiche_usages_pesticides(
   liste_cd_sandre,
   liste_pesticides,
   legend_position = "bottom",
-  cultures_a_exclure = c()
+  cultures_a_exclure = c(),
+  police_etiquettes = 1
 )
 }
 \arguments{
@@ -43,6 +44,9 @@ Les noms valides sont :
 \item \code{"Vignes"}
 \item \code{"Traitements généraux"}
 }}
+
+\item{police_etiquettes}{Taille de la police de caractères dans les
+étiquettes. Défaut : \code{1}.}
 }
 \value{
 Un objet graphique de type \code{grob} représentant un tableau coloré des usages par culture.

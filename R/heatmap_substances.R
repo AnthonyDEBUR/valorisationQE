@@ -27,6 +27,10 @@
 #' Défaut : `2`.
 #' @param chiffres_significatifs Nombre de chiffres significatifs à afficher 
 #' dans les cases. Défaut : `2`.
+#' @param police_etiquettes Taille de la police de caractères dans les 
+#' étiquettes. Défaut : `6`.
+#' @param police_axes Taille de la police de caractères pour les 
+#' axes. Défaut : `12`.
 #'
 #' @return Un objet ggplot représentant la heatmap.
 #' 
@@ -72,7 +76,9 @@ heatmap_substances <- function(
   titre = "Substances quantifiées au-delà du seuil",
   seuil_bas = 0.1,
   seuil_haut = 2,
-  chiffres_significatifs = 2
+  chiffres_significatifs = 2,
+  police_etiquettes = 6,
+  police_axes = 12
 ) {
   # Étape 1 : identifier les substances quantifiées au-delà du seuil_bas avec CdRqAna == "1"
   substances_significatives <- df %>%
@@ -86,7 +92,12 @@ heatmap_substances <- function(
   # Étape 3 : créer le gradient de couleur personnalisé
   gradient_colors <- ggplot2::scale_fill_gradientn(
     colours = c("lightblue", "yellow", "red", "purple"),
-    values = scales::rescale(c(0, seuil_bas, seuil_haut, max(donnees_heatmap[[col_result]], na.rm = TRUE))),
+    values = scales::rescale(c(0, 
+                               seuil_bas, 
+                               seuil_haut, 
+                               max(max(donnees_heatmap[[col_result]], na.rm = TRUE),2*seuil_haut)
+                               )
+                             ),
     name = "(µg/L)"
   )
   
@@ -97,12 +108,16 @@ heatmap_substances <- function(
                                     fill = .data[[col_result]])) +
     ggplot2::geom_tile(color = "white") +
     ggplot2::geom_text(ggplot2::aes(label = round(.data[[col_result]], chiffres_significatifs)), 
-                       size = 3, 
+                       size = police_etiquettes, 
                        color = "black") +
     gradient_colors +
     ggplot2::labs(title = titre, x = "", y = "") +
     ggplot2::theme_minimal() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = police_axes),
+    axis.text.y = ggplot2::element_text(size = police_axes)
+        )
+
   
   return(g)
 }

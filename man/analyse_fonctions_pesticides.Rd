@@ -8,7 +8,8 @@ analyse_fonctions_pesticides(
   data,
   code_remarque = "CdRqAna",
   code_parametre = "CdParametre",
-  liste_pesticides
+  liste_pesticides,
+  police_axes = 12
 )
 }
 \arguments{
@@ -23,6 +24,9 @@ Par défaut \code{"CdParametre"}.}
 
 \item{liste_pesticides}{Data frame issu de la fonction \code{importe_ref_pestibase}, contenant
 les colonnes \code{SA_CodeSANDRE}, \code{function_bzh} et \code{function_fr} pour l'association des fonctions.}
+
+\item{police_axes}{Taille de la police de caractères dans les
+axes Défaut : \code{12}.}
 }
 \value{
 Un objet \code{ggplot} représentant la répartition des fonctions des substances

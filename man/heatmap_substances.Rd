@@ -13,7 +13,9 @@ heatmap_substances(
   titre = "Substances quantifiées au-delà du seuil",
   seuil_bas = 0.1,
   seuil_haut = 2,
-  chiffres_significatifs = 2
+  chiffres_significatifs = 2,
+  police_etiquettes = 6,
+  police_axes = 12
 )
 }
 \arguments{
@@ -41,6 +43,12 @@ Défaut : \code{2}.}
 
 \item{chiffres_significatifs}{Nombre de chiffres significatifs à afficher
 dans les cases. Défaut : \code{2}.}
+
+\item{police_etiquettes}{Taille de la police de caractères dans les
+étiquettes. Défaut : \code{6}.}
+
+\item{police_axes}{Taille de la police de caractères pour les
+axes. Défaut : \code{12}.}
 }
 \value{
 Un objet ggplot représentant la heatmap.
