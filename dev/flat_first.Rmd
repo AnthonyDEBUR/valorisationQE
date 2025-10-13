@@ -258,7 +258,7 @@ test_that("f_fond_de_carte works", {
 #' @param breaks Vecteur numérique définissant les seuils de classes de 
 #' concentration (par défaut `c(0, 0.5, 2, Inf)`).
 #' @param values Vecteur de couleurs correspondant aux classes de concentration 
-#' (par défaut `c("cyan", "yellow", "red", "black")`).
+#' (par défaut `c("cyan", "yellow", "red")`).
 #' @param pts_size Taille des points représentant les stations (par défaut `6`).
 #' @param text_size Taille du texte des étiquettes (par défaut `5`).
 #' @param unite Unité des concentrations affichée dans la légende et les 
@@ -297,7 +297,7 @@ f_cartographie_concentrations <-function(fond_carte,
                          titre="Bilan des concentrations en pesticides",
                          sous_titre="Date de la campagne",
                          breaks=c(0, 0.5, 2, Inf),
-                         values = c("cyan", "yellow", "red", "black"),
+                         values = c("cyan", "yellow", "red"),
                          pts_size=6,
                          text_size=5,
                          unite="µg/L",
@@ -350,7 +350,7 @@ if (!col_valeurs %in% colnames(data_carte)) {
 }
 
 # Vérification de la cohérence entre breaks et values
-if (length(breaks) != length(values)) {
+if ((length(breaks)-1) != length(values)) {
   stop(paste0("Erreur : Le vecteur 'values' doit contenir ", length(breaks) - 1, " couleurs, correspondant aux ", length(breaks) - 1, " classes définies par 'breaks'."))
 }
   
@@ -392,9 +392,7 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
   stop("'segment.color' doit être une chaîne de caractères représentant une couleur.")
 }
 
-  
-  
-   shp_staq$CdStationMesureEauxSurface<-shp_staq[[col_stations_shp]]
+  shp_staq$CdStationMesureEauxSurface<-shp_staq[[col_stations_shp]]
   data_carte$CdStationMesureEauxSurface<-data_carte[[col_stations_data]]
   data_carte$Somme<-data_carte[[col_valeurs]]
 
@@ -403,8 +401,13 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
   # data_carte$classe_somme_pesticides<-cut(data_carte$Somme, breaks = breaks)
 
   data_carte_legend<-data_carte%>%st_drop_geometry()
-  data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
-  data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
+  data_carte_centroids <- sf::st_centroid(sf::st_union(data_carte))
+  coords <- sf::st_coordinates(data_carte_centroids)
+  data_carte_legend$X <- coords[, "X"]
+  data_carte_legend$Y <- coords[, "Y"]
+
+  # data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
+  # data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
 
   # Créer les étiquettes
   labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], unite)
@@ -424,24 +427,68 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
     unite
   )
   
-  
+  # ajouts de points virtuels pour bien avoir tous les éléments de légende
 
+classes_presentes <- unique(data_carte$classe_somme_pesticides)
+classes_manquantes <- setdiff(labels, classes_presentes)
+
+if(length(classes_manquantes)>0)
+{# Étape 1 : créer un modèle vide
+modele <- data_carte[0, ]  # garde la structure sans données
+
+# Étape 2 : créer les points fictifs avec les bonnes colonnes
+points_fictifs <- data.frame(
+  classe_somme_pesticides = classes_manquantes
+)
+
+# Ajouter les colonnes manquantes avec NA
+for (col in setdiff(names(modele), names(points_fictifs))) {
+  points_fictifs[[col]] <- NA
+}
+
+# Ajouter des coordonnées fictives
+bbox <- sf::st_bbox(data_carte)
+  marge <- 0.01 * (bbox$xmax - bbox$xmin)  # 1% de la largeur
+  x_fictif <- bbox$xmin + marge
+  y_fictif <- bbox$ymin + marge
+
+  points_fictifs$X <- x_fictif
+  points_fictifs$Y <- y_fictif
+
+
+# Convertir en sf
+points_fictifs_sf <- st_as_sf(points_fictifs, coords = c("X", "Y"), crs = st_crs(data_carte))
+
+# Étape 3 : fusionner
+data_carte <- rbind(modele, data_carte, points_fictifs_sf)
+}
+
+  
   g<-fond_carte +
     geom_sf(data = data_carte,
             inherit.aes=FALSE,
             aes(color=classe_somme_pesticides),
-            size=pts_size
-    ) +
-    scale_color_manual(values = values,
+            size=pts_size,
+          alpha = ifelse(data_carte$classe_somme_pesticides %in% classes_manquantes, 0, 1)
+    ) +  scale_color_manual(values = values,
                        labels = labels,
                        drop=FALSE)+
+  guides(color = guide_legend(
+    override.aes = list(
+      shape = 16,       # forme du symbole
+      size = pts_size,         # taille du symbole dans la légende
+      fill = NA,        # pas de remplissage
+      stroke = 0.5      # contour
+    )
+  )) +
     geom_sf(data = data_carte,
             inherit.aes=FALSE,
             color="black",
             fill=NA,
             stroke=0.5,
             shape=21,
-            size=pts_size
+            size=pts_size,
+          alpha = ifelse(data_carte$classe_somme_pesticides %in% classes_manquantes, 0, 1)
     ) +
         geom_label_repel(data = data_carte_legend,
                      aes(x = X, y = Y, label = label),
@@ -510,7 +557,7 @@ f_cartographie_concentrations(fond_carte,
                               titre="Bilan des concentrations en pesticides",
                               sous_titre="Date de la campagne",
                               breaks=c(0, 0.5, 2, Inf),
-                              values = c("cyan", "yellow", "red", "black"),
+                              values = c("cyan", "yellow", "red"),
                               pts_size=6,
                               text_size=5,
                               unite="µg/L",
@@ -1787,6 +1834,8 @@ test_that("fiche_usages_pesticides works", {
 #' étiquettes. Défaut : `6`.
 #' @param police_axes Taille de la police de caractères pour les 
 #' axes. Défaut : `12`.
+#' @param  type_palette : palette de couleur "discrete" (par défaut) ou  
+#' "continue" 
 #'
 #' @return Un objet ggplot représentant la heatmap.
 #' 
@@ -1803,47 +1852,66 @@ heatmap_substances <- function(
   seuil_haut = 2,
   chiffres_significatifs = 2,
   police_etiquettes = 6,
-  police_axes = 12
+  police_axes = 12,
+  type_palette = "discrete" # "continue" ou "discrete"
 ) {
-  # Étape 1 : identifier les substances quantifiées au-delà du seuil_bas avec CdRqAna == "1"
-  substances_significatives <- df %>%
-    dplyr::filter(.data[[col_remarque]] == "1", .data[[col_result]] > seuil_bas) %>%
-    dplyr::distinct(.data[[col_param]])
-  
-  # Étape 2 : récupérer toutes les lignes pour ces substances
-  donnees_heatmap <- df %>%
-    dplyr::filter(.data[[col_param]] %in% substances_significatives[[col_param]] & .data[[col_remarque]] == "1")
-  
-  # Étape 3 : créer le gradient de couleur personnalisé
-  gradient_colors <- ggplot2::scale_fill_gradientn(
-    colours = c("lightblue", "yellow", "red", "purple"),
-    values = scales::rescale(c(0, 
-                               seuil_bas, 
-                               seuil_haut, 
-                               max(max(donnees_heatmap[[col_result]], na.rm = TRUE),2*seuil_haut)
-                               )
-                             ),
-    name = "(µg/L)"
-  )
-  
-  # Étape 4 : créer le graphique
-  g <- ggplot2::ggplot(donnees_heatmap, 
-                       ggplot2::aes(x = .data[[col_station]], 
-                                    y = .data[[col_param]], 
-                                    fill = .data[[col_result]])) +
-    ggplot2::geom_tile(color = "white") +
-    ggplot2::geom_text(ggplot2::aes(label = round(.data[[col_result]], chiffres_significatifs)), 
-                       size = police_etiquettes, 
-                       color = "black") +
-    gradient_colors +
-    ggplot2::labs(title = titre, x = "", y = "") +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = police_axes),
-    axis.text.y = ggplot2::element_text(size = police_axes)
-        )
+  library(dplyr)
+  library(ggplot2)
+  library(scales)
 
-  
+  # Étape 1 : filtrer les substances significatives
+  substances_significatives <- df %>%
+    filter(.data[[col_remarque]] == "1", .data[[col_result]] > seuil_bas) %>%
+    distinct(.data[[col_param]])
+
+  # Étape 2 : récupérer les données pertinentes
+  donnees_heatmap <- df %>%
+    filter(.data[[col_param]] %in% substances_significatives[[col_param]] & .data[[col_remarque]] == "1")
+
+  # Étape 3 : définir la palette de couleurs
+  if (type_palette == "continue") {
+    palette_couleur <- scale_fill_gradientn(
+      colours = c("lightblue", "yellow", "red", "purple"),
+      values = rescale(c(0, seuil_bas, seuil_haut, max(max(donnees_heatmap[[col_result]], na.rm = TRUE), 2 * seuil_haut))),
+      name = "(µg/L)"
+    )
+  } else if (type_palette == "discrete") {
+    # Créer des classes de concentration
+    donnees_heatmap <- donnees_heatmap %>%
+      mutate(classe_concentration = cut(.data[[col_result]],
+        breaks = c(0, seuil_bas, seuil_haut, Inf),
+        labels = c(paste0("≤ ", seuil_bas), paste0(seuil_bas, " - ", seuil_haut), paste0("> ", seuil_haut))
+      ))
+
+   palette_couleur <- scale_fill_manual(
+  values = setNames(
+    c("lightblue", "orange", "red"),
+    c(paste0("≤ ", seuil_bas),
+      paste0(seuil_bas, " - ", seuil_haut),
+      paste0("> ", seuil_haut))
+  ),
+  name = "(µg/L)"
+)
+
+  }
+
+  # Étape 4 : créer le graphique
+  g <- ggplot(donnees_heatmap,
+              aes(x = .data[[col_station]],
+                  y = .data[[col_param]],
+                  fill = if (type_palette == "continue") .data[[col_result]] else .data[["classe_concentration"]])) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = round(.data[[col_result]], chiffres_significatifs)),
+              size = police_etiquettes,
+              color = "black") +
+    palette_couleur +
+    labs(title = titre, x = "", y = "") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = police_axes),
+      axis.text.y = element_text(size = police_axes)
+    )
+
   return(g)
 }
 ```
@@ -1857,8 +1925,7 @@ stations <- c("04123456", "04345678", "04987654", "04246810")
 # Définition des pesticides courants en France
 pesticides <- c(
   "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
-  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
-  "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline"
 )
 
 # Génération du jeu de données
@@ -1867,17 +1934,27 @@ df_fictif <- expand.grid(CdStationMesureEauxSurface = stations, NomParametre = p
   dplyr::rowwise() %>%
   dplyr::mutate(
     RsAna = round(runif(1, 0, 1), 2),
-    CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+    CdRqAna = ifelse(RsAna <= 0.02, "0", "1")
   ) %>%
   dplyr::ungroup()
 
 
 heatmap_substances(
   df = df_fictif,
-  titre = "Substances quantifiées > 0.1 µg/L",
+  titre = "Substances quantifiées > 0.1 µg/L - palette continue",
   seuil_bas = 0.1,
   seuil_haut = 2,
-  chiffres_significatifs=2
+  chiffres_significatifs=2,
+  type_palette="continue"
+)
+
+heatmap_substances(
+  df = df_fictif,
+  titre = "Substances quantifiées > 0.1 µg/L - palette discrete",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs=2,
+  type_palette="discrete"
 )
 ```
   

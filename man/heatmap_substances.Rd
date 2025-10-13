@@ -15,7 +15,8 @@ heatmap_substances(
   seuil_haut = 2,
   chiffres_significatifs = 2,
   police_etiquettes = 6,
-  police_axes = 12
+  police_axes = 12,
+  type_palette = "discrete"
 )
 }
 \arguments{
@@ -49,6 +50,9 @@ dans les cases. Défaut : \code{2}.}
 
 \item{police_axes}{Taille de la police de caractères pour les
 axes. Défaut : \code{12}.}
+
+\item{type_palette}{: palette de couleur "discrete" (par défaut) ou
+"continue"}
 }
 \value{
 Un objet ggplot représentant la heatmap.
@@ -72,8 +76,7 @@ stations <- c("04123456", "04345678", "04987654", "04246810")
 # Définition des pesticides courants en France
 pesticides <- c(
   "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
-  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
-  "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline"
 )
 
 # Génération du jeu de données
@@ -82,16 +85,26 @@ df_fictif <- expand.grid(CdStationMesureEauxSurface = stations, NomParametre = p
   dplyr::rowwise() \%>\%
   dplyr::mutate(
     RsAna = round(runif(1, 0, 1), 2),
-    CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+    CdRqAna = ifelse(RsAna <= 0.02, "0", "1")
   ) \%>\%
   dplyr::ungroup()
 
 
 heatmap_substances(
   df = df_fictif,
-  titre = "Substances quantifiées > 0.1 µg/L",
+  titre = "Substances quantifiées > 0.1 µg/L - palette continue",
   seuil_bas = 0.1,
   seuil_haut = 2,
-  chiffres_significatifs=2
+  chiffres_significatifs=2,
+  type_palette="continue"
+)
+
+heatmap_substances(
+  df = df_fictif,
+  titre = "Substances quantifiées > 0.1 µg/L - palette discrete",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs=2,
+  type_palette="discrete"
 )
 }

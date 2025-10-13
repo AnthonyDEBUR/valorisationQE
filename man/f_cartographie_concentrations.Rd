@@ -13,7 +13,7 @@ f_cartographie_concentrations(
   titre = "Bilan des concentrations en pesticides",
   sous_titre = "Date de la campagne",
   breaks = c(0, 0.5, 2, Inf),
-  values = c("cyan", "yellow", "red", "black"),
+  values = c("cyan", "yellow", "red"),
   pts_size = 6,
   text_size = 5,
   unite = "µg/L",
@@ -54,7 +54,7 @@ utiliser (par défaut \code{"RsAna"}).}
 concentration (par défaut \code{c(0, 0.5, 2, Inf)}).}
 
 \item{values}{Vecteur de couleurs correspondant aux classes de concentration
-(par défaut \code{c("cyan", "yellow", "red", "black")}).}
+(par défaut \code{c("cyan", "yellow", "red")}).}
 
 \item{pts_size}{Taille des points représentant les stations (par défaut \code{6}).}
 
@@ -144,7 +144,7 @@ f_cartographie_concentrations(fond_carte,
                               titre="Bilan des concentrations en pesticides",
                               sous_titre="Date de la campagne",
                               breaks=c(0, 0.5, 2, Inf),
-                              values = c("cyan", "yellow", "red", "black"),
+                              values = c("cyan", "yellow", "red"),
                               pts_size=6,
                               text_size=5,
                               unite="µg/L",

@@ -31,6 +31,8 @@
 #' étiquettes. Défaut : `6`.
 #' @param police_axes Taille de la police de caractères pour les 
 #' axes. Défaut : `12`.
+#' @param  type_palette : palette de couleur "discrete" (par défaut) ou  
+#' "continue" 
 #'
 #' @return Un objet ggplot représentant la heatmap.
 #' 
@@ -44,8 +46,7 @@
 #' # Définition des pesticides courants en France
 #' pesticides <- c(
 #'   "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
-#'   "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
-#'   "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+#'   "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline"
 #' )
 #'
 #' # Génération du jeu de données
@@ -54,17 +55,27 @@
 #'   dplyr::rowwise() %>%
 #'   dplyr::mutate(
 #'     RsAna = round(runif(1, 0, 1), 2),
-#'     CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+#'     CdRqAna = ifelse(RsAna <= 0.02, "0", "1")
 #'   ) %>%
 #'   dplyr::ungroup()
 #'
 #'
 #' heatmap_substances(
 #'   df = df_fictif,
-#'   titre = "Substances quantifiées > 0.1 µg/L",
+#'   titre = "Substances quantifiées > 0.1 µg/L - palette continue",
 #'   seuil_bas = 0.1,
 #'   seuil_haut = 2,
-#'   chiffres_significatifs=2
+#'   chiffres_significatifs=2,
+#'   type_palette="continue"
+#' )
+#'
+#' heatmap_substances(
+#'   df = df_fictif,
+#'   titre = "Substances quantifiées > 0.1 µg/L - palette discrete",
+#'   seuil_bas = 0.1,
+#'   seuil_haut = 2,
+#'   chiffres_significatifs=2,
+#'   type_palette="discrete"
 #' )
 
 heatmap_substances <- function(
@@ -78,46 +89,65 @@ heatmap_substances <- function(
   seuil_haut = 2,
   chiffres_significatifs = 2,
   police_etiquettes = 6,
-  police_axes = 12
+  police_axes = 12,
+  type_palette = "discrete" # "continue" ou "discrete"
 ) {
-  # Étape 1 : identifier les substances quantifiées au-delà du seuil_bas avec CdRqAna == "1"
-  substances_significatives <- df %>%
-    dplyr::filter(.data[[col_remarque]] == "1", .data[[col_result]] > seuil_bas) %>%
-    dplyr::distinct(.data[[col_param]])
-  
-  # Étape 2 : récupérer toutes les lignes pour ces substances
-  donnees_heatmap <- df %>%
-    dplyr::filter(.data[[col_param]] %in% substances_significatives[[col_param]] & .data[[col_remarque]] == "1")
-  
-  # Étape 3 : créer le gradient de couleur personnalisé
-  gradient_colors <- ggplot2::scale_fill_gradientn(
-    colours = c("lightblue", "yellow", "red", "purple"),
-    values = scales::rescale(c(0, 
-                               seuil_bas, 
-                               seuil_haut, 
-                               max(max(donnees_heatmap[[col_result]], na.rm = TRUE),2*seuil_haut)
-                               )
-                             ),
-    name = "(µg/L)"
-  )
-  
-  # Étape 4 : créer le graphique
-  g <- ggplot2::ggplot(donnees_heatmap, 
-                       ggplot2::aes(x = .data[[col_station]], 
-                                    y = .data[[col_param]], 
-                                    fill = .data[[col_result]])) +
-    ggplot2::geom_tile(color = "white") +
-    ggplot2::geom_text(ggplot2::aes(label = round(.data[[col_result]], chiffres_significatifs)), 
-                       size = police_etiquettes, 
-                       color = "black") +
-    gradient_colors +
-    ggplot2::labs(title = titre, x = "", y = "") +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-    axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = police_axes),
-    axis.text.y = ggplot2::element_text(size = police_axes)
-        )
+  library(dplyr)
+  library(ggplot2)
+  library(scales)
 
-  
+  # Étape 1 : filtrer les substances significatives
+  substances_significatives <- df %>%
+    filter(.data[[col_remarque]] == "1", .data[[col_result]] > seuil_bas) %>%
+    distinct(.data[[col_param]])
+
+  # Étape 2 : récupérer les données pertinentes
+  donnees_heatmap <- df %>%
+    filter(.data[[col_param]] %in% substances_significatives[[col_param]] & .data[[col_remarque]] == "1")
+
+  # Étape 3 : définir la palette de couleurs
+  if (type_palette == "continue") {
+    palette_couleur <- scale_fill_gradientn(
+      colours = c("lightblue", "yellow", "red", "purple"),
+      values = rescale(c(0, seuil_bas, seuil_haut, max(max(donnees_heatmap[[col_result]], na.rm = TRUE), 2 * seuil_haut))),
+      name = "(µg/L)"
+    )
+  } else if (type_palette == "discrete") {
+    # Créer des classes de concentration
+    donnees_heatmap <- donnees_heatmap %>%
+      mutate(classe_concentration = cut(.data[[col_result]],
+        breaks = c(0, seuil_bas, seuil_haut, Inf),
+        labels = c(paste0("≤ ", seuil_bas), paste0(seuil_bas, " - ", seuil_haut), paste0("> ", seuil_haut))
+      ))
+
+   palette_couleur <- scale_fill_manual(
+  values = setNames(
+    c("lightblue", "orange", "red"),
+    c(paste0("≤ ", seuil_bas),
+      paste0(seuil_bas, " - ", seuil_haut),
+      paste0("> ", seuil_haut))
+  ),
+  name = "(µg/L)"
+)
+
+  }
+
+  # Étape 4 : créer le graphique
+  g <- ggplot(donnees_heatmap,
+              aes(x = .data[[col_station]],
+                  y = .data[[col_param]],
+                  fill = if (type_palette == "continue") .data[[col_result]] else .data[["classe_concentration"]])) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = round(.data[[col_result]], chiffres_significatifs)),
+              size = police_etiquettes,
+              color = "black") +
+    palette_couleur +
+    labs(title = titre, x = "", y = "") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = police_axes),
+      axis.text.y = element_text(size = police_axes)
+    )
+
   return(g)
 }

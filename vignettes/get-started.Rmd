@@ -160,7 +160,7 @@ f_cartographie_concentrations(fond_carte,
                               titre="Bilan des concentrations en pesticides",
                               sous_titre="Date de la campagne",
                               breaks=c(0, 0.5, 2, Inf),
-                              values = c("cyan", "yellow", "red", "black"),
+                              values = c("cyan", "yellow", "red"),
                               pts_size=6,
                               text_size=5,
                               unite="µg/L",
@@ -268,8 +268,7 @@ stations <- c("04123456", "04345678", "04987654", "04246810")
 # Définition des pesticides courants en France
 pesticides <- c(
   "Glyphosate", "Atrazine", "Métolachlore", "S-métolachlore", "Terbuthylazine",
-  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline", "Prosulfocarbe",
-  "Acétochlore", "Alachlore", "Linuron", "Oxadiazon", "Clopyralid"
+  "Chlorotoluron", "Isoproturon", "Diuron", "Pendiméthaline"
 )
 
 # Génération du jeu de données
@@ -278,17 +277,27 @@ df_fictif <- expand.grid(CdStationMesureEauxSurface = stations, NomParametre = p
   dplyr::rowwise() %>%
   dplyr::mutate(
     RsAna = round(runif(1, 0, 1), 2),
-    CdRqAna = ifelse(RsAna <= 0.06, "0", "1")
+    CdRqAna = ifelse(RsAna <= 0.02, "0", "1")
   ) %>%
   dplyr::ungroup()
 
 
 heatmap_substances(
   df = df_fictif,
-  titre = "Substances quantifiées > 0.1 µg/L",
+  titre = "Substances quantifiées > 0.1 µg/L - palette continue",
   seuil_bas = 0.1,
   seuil_haut = 2,
-  chiffres_significatifs=2
+  chiffres_significatifs=2,
+  type_palette="continue"
+)
+
+heatmap_substances(
+  df = df_fictif,
+  titre = "Substances quantifiées > 0.1 µg/L - palette discrete",
+  seuil_bas = 0.1,
+  seuil_haut = 2,
+  chiffres_significatifs=2,
+  type_palette="discrete"
 )
 ```
 

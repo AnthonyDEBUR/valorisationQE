@@ -28,7 +28,7 @@
 #' @param breaks Vecteur numérique définissant les seuils de classes de 
 #' concentration (par défaut `c(0, 0.5, 2, Inf)`).
 #' @param values Vecteur de couleurs correspondant aux classes de concentration 
-#' (par défaut `c("cyan", "yellow", "red", "black")`).
+#' (par défaut `c("cyan", "yellow", "red")`).
 #' @param pts_size Taille des points représentant les stations (par défaut `6`).
 #' @param text_size Taille du texte des étiquettes (par défaut `5`).
 #' @param unite Unité des concentrations affichée dans la légende et les 
@@ -105,7 +105,7 @@
 #'                               titre="Bilan des concentrations en pesticides",
 #'                               sous_titre="Date de la campagne",
 #'                               breaks=c(0, 0.5, 2, Inf),
-#'                               values = c("cyan", "yellow", "red", "black"),
+#'                               values = c("cyan", "yellow", "red"),
 #'                               pts_size=6,
 #'                               text_size=5,
 #'                               unite="µg/L",
@@ -120,7 +120,7 @@ f_cartographie_concentrations <-function(fond_carte,
                          titre="Bilan des concentrations en pesticides",
                          sous_titre="Date de la campagne",
                          breaks=c(0, 0.5, 2, Inf),
-                         values = c("cyan", "yellow", "red", "black"),
+                         values = c("cyan", "yellow", "red"),
                          pts_size=6,
                          text_size=5,
                          unite="µg/L",
@@ -173,7 +173,7 @@ if (!col_valeurs %in% colnames(data_carte)) {
 }
 
 # Vérification de la cohérence entre breaks et values
-if (length(breaks) != length(values)) {
+if ((length(breaks)-1) != length(values)) {
   stop(paste0("Erreur : Le vecteur 'values' doit contenir ", length(breaks) - 1, " couleurs, correspondant aux ", length(breaks) - 1, " classes définies par 'breaks'."))
 }
   
@@ -215,9 +215,7 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
   stop("'segment.color' doit être une chaîne de caractères représentant une couleur.")
 }
 
-  
-  
-   shp_staq$CdStationMesureEauxSurface<-shp_staq[[col_stations_shp]]
+  shp_staq$CdStationMesureEauxSurface<-shp_staq[[col_stations_shp]]
   data_carte$CdStationMesureEauxSurface<-data_carte[[col_stations_data]]
   data_carte$Somme<-data_carte[[col_valeurs]]
 
@@ -226,8 +224,13 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
   # data_carte$classe_somme_pesticides<-cut(data_carte$Somme, breaks = breaks)
 
   data_carte_legend<-data_carte%>%st_drop_geometry()
-  data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
-  data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
+  data_carte_centroids <- sf::st_centroid(sf::st_union(data_carte))
+  coords <- sf::st_coordinates(data_carte_centroids)
+  data_carte_legend$X <- coords[, "X"]
+  data_carte_legend$Y <- coords[, "Y"]
+
+  # data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
+  # data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
 
   # Créer les étiquettes
   labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], unite)
@@ -247,24 +250,68 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
     unite
   )
   
-  
+  # ajouts de points virtuels pour bien avoir tous les éléments de légende
 
+classes_presentes <- unique(data_carte$classe_somme_pesticides)
+classes_manquantes <- setdiff(labels, classes_presentes)
+
+if(length(classes_manquantes)>0)
+{# Étape 1 : créer un modèle vide
+modele <- data_carte[0, ]  # garde la structure sans données
+
+# Étape 2 : créer les points fictifs avec les bonnes colonnes
+points_fictifs <- data.frame(
+  classe_somme_pesticides = classes_manquantes
+)
+
+# Ajouter les colonnes manquantes avec NA
+for (col in setdiff(names(modele), names(points_fictifs))) {
+  points_fictifs[[col]] <- NA
+}
+
+# Ajouter des coordonnées fictives
+bbox <- sf::st_bbox(data_carte)
+  marge <- 0.01 * (bbox$xmax - bbox$xmin)  # 1% de la largeur
+  x_fictif <- bbox$xmin + marge
+  y_fictif <- bbox$ymin + marge
+
+  points_fictifs$X <- x_fictif
+  points_fictifs$Y <- y_fictif
+
+
+# Convertir en sf
+points_fictifs_sf <- st_as_sf(points_fictifs, coords = c("X", "Y"), crs = st_crs(data_carte))
+
+# Étape 3 : fusionner
+data_carte <- rbind(modele, data_carte, points_fictifs_sf)
+}
+
+  
   g<-fond_carte +
     geom_sf(data = data_carte,
             inherit.aes=FALSE,
             aes(color=classe_somme_pesticides),
-            size=pts_size
-    ) +
-    scale_color_manual(values = values,
+            size=pts_size,
+          alpha = ifelse(data_carte$classe_somme_pesticides %in% classes_manquantes, 0, 1)
+    ) +  scale_color_manual(values = values,
                        labels = labels,
                        drop=FALSE)+
+  guides(color = guide_legend(
+    override.aes = list(
+      shape = 16,       # forme du symbole
+      size = pts_size,         # taille du symbole dans la légende
+      fill = NA,        # pas de remplissage
+      stroke = 0.5      # contour
+    )
+  )) +
     geom_sf(data = data_carte,
             inherit.aes=FALSE,
             color="black",
             fill=NA,
             stroke=0.5,
             shape=21,
-            size=pts_size
+            size=pts_size,
+          alpha = ifelse(data_carte$classe_somme_pesticides %in% classes_manquantes, 0, 1)
     ) +
         geom_label_repel(data = data_carte_legend,
                      aes(x = X, y = Y, label = label),
