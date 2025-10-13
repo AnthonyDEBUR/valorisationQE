@@ -23,7 +23,8 @@ f_cartographie_concentrations(
   box.padding = 0.35,
   point.padding = 0.3,
   segment.color = "grey50",
-  min.segment.length = 0
+  min.segment.length = 0,
+  max.overlaps = 12
 )
 }
 \arguments{
@@ -84,6 +85,9 @@ grey50 par défaut. Voir geom_text_repel du package ggrepel}
 
 \item{min.segment.length}{Longueur mini entre un point et son étiquette
 (par défaut 0) Voir geom_text_repel du package ggrepel}
+
+\item{max.overlaps}{Nombre maximum de chevauchement d'étiquettes
+(par défaut 12) Voir geom_text_repel du package ggrepel}
 }
 \value{
 Un objet \code{ggplot} représentant la carte des concentrations avec
