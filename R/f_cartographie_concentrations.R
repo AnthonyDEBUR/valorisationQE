@@ -49,8 +49,9 @@
 #' @param min.segment.length Longueur mini entre un point et son étiquette 
 #' (par défaut 0) Voir geom_text_repel du package ggrepel
 #' @param max.overlaps Nombre maximum de chevauchement d'étiquettes 
-#' (par défaut 12) Voir geom_text_repel du package ggrepel
-#'  
+#' (par défaut 20) Voir geom_text_repel du package ggrepel
+#' @param force_pull force qui attire vers le point l'étiquette 
+#' (par défaut 0.5) Voir geom_text_repel du package ggrepel  
 #' 
 #' @return Un objet `ggplot` représentant la carte des concentrations avec 
 #' légende, points colorés selon les classes, et étiquettes.
@@ -133,7 +134,8 @@ f_cartographie_concentrations <-function(fond_carte,
                      point.padding = 0.3,
                      segment.color = "grey50",
                      min.segment.length = 0,
-                     max.overlaps = 12
+                     max.overlaps = 20,
+                     force_pull=0.5
 ){
 
 # Vérification des types d'objets
