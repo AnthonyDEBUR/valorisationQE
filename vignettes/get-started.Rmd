@@ -165,8 +165,7 @@ f_cartographie_concentrations(fond_carte,
                               text_size=5,
                               unite="µg/L",
                               nom_legende="Concentrations",
-                              nb_decimal_text=1,
-                              segment.size = 1)
+                              nb_decimal_text=1)
 
 ```
 

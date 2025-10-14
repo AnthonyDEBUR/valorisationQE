@@ -81,7 +81,8 @@ f_graph_pluviometrie<-function(shp_territoire,
          y="mm/jour",
          title="Précipitations journalières") +
     ggplot2::theme_minimal() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle=45, hjust=1))
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle=45, hjust=1))+
+    ggplot2::ylim(0,NA)
   
   return(g)
   
