@@ -49,7 +49,7 @@
 #' @param min.segment.length Longueur mini entre un point et son étiquette 
 #' (par défaut 0) Voir geom_text_repel du package ggrepel
 #' @param max.overlaps Nombre maximum de chevauchement d'étiquettes 
-#' (par défaut 20) Voir geom_text_repel du package ggrepel
+#' (par défaut 15) Voir geom_text_repel du package ggrepel
 #' @param force_pull force qui attire vers le point l'étiquette 
 #' (par défaut 0.5) Voir geom_text_repel du package ggrepel  
 #' 
@@ -134,7 +134,7 @@ f_cartographie_concentrations <-function(fond_carte,
                      point.padding = 0.3,
                      segment.color = "grey50",
                      min.segment.length = 0,
-                     max.overlaps = 20,
+                     max.overlaps = 15,
                      force_pull=0.5
 ){
 
@@ -225,17 +225,15 @@ if (!is.numeric(min.segment.length) || min.segment.length < 0) {
   data_carte$Somme<-data_carte[[col_valeurs]]
 
   data_carte<-right_join(shp_staq, data_carte, by=c("CdStationMesureEauxSurface"))
-  # on définit les classes de concentration.
-  # data_carte$classe_somme_pesticides<-cut(data_carte$Somme, breaks = breaks)
 
   data_carte_legend<-data_carte%>%st_drop_geometry()
-  data_carte_centroids <- sf::st_centroid(sf::st_union(data_carte))
-  coords <- sf::st_coordinates(data_carte_centroids)
-  data_carte_legend$X <- coords[, "X"]
-  data_carte_legend$Y <- coords[, "Y"]
+  # data_carte_centroids <- sf::st_centroid(sf::st_union(data_carte))
+  # coords <- sf::st_coordinates(data_carte_centroids)
+  # data_carte_legend$X <- coords[, "X"]
+  # data_carte_legend$Y <- coords[, "Y"]
 
-  # data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
-  # data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
+  data_carte_legend$X<-st_coordinates(data_carte)[,"X"]
+  data_carte_legend$Y<-st_coordinates(data_carte)[,"Y"]
 
   # Créer les étiquettes
   labels <- paste0(breaks[-length(breaks)], "-", breaks[-1], unite)

@@ -24,7 +24,7 @@ f_cartographie_concentrations(
   point.padding = 0.3,
   segment.color = "grey50",
   min.segment.length = 0,
-  max.overlaps = 20,
+  max.overlaps = 15,
   force_pull = 0.5
 )
 }
@@ -88,7 +88,7 @@ grey50 par défaut. Voir geom_text_repel du package ggrepel}
 (par défaut 0) Voir geom_text_repel du package ggrepel}
 
 \item{max.overlaps}{Nombre maximum de chevauchement d'étiquettes
-(par défaut 20) Voir geom_text_repel du package ggrepel}
+(par défaut 15) Voir geom_text_repel du package ggrepel}
 
 \item{force_pull}{force qui attire vers le point l'étiquette
 (par défaut 0.5) Voir geom_text_repel du package ggrepel}
