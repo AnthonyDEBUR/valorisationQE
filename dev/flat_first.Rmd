@@ -275,7 +275,8 @@ test_that("f_fond_de_carte works", {
 #' @param point.padding Marge autour de l'étiquette (par défaut 0.3) Voir 
 #' geom_text_repel du package ggrepel
 #' @param segment.color Couleur du segment liant les points à leurs étiquettes. 
-#' grey50 par défaut. Voir geom_text_repel du package ggrepel 
+#' grey50 par défaut. Voir geom_text_repel du package ggrepel
+#' @param segment.size épaisseur du segment des étiquettes (défaut 0.5) 
 #' @param min.segment.length Longueur mini entre un point et son étiquette 
 #' (par défaut 0) Voir geom_text_repel du package ggrepel
 #' @param max.overlaps Nombre maximum de chevauchement d'étiquettes 
@@ -310,6 +311,7 @@ f_cartographie_concentrations <-function(fond_carte,
                          box.padding = 0.35,
                      point.padding = 0.3,
                      segment.color = "grey50",
+                     segment.size = 0.5,
                      min.segment.length = 0,
                      max.overlaps = 15,
                      force_pull=0.5
@@ -501,6 +503,7 @@ data_carte <- rbind(modele, data_carte, points_fictifs_sf)
                      box.padding = box.padding,
                      point.padding = point.padding,
                      segment.color = segment.color,
+                     segment.size = segment.size,
                      min.segment.length = min.segment.length,
                      max.overlaps=max.overlaps)+
       ggtitle(label=titre,

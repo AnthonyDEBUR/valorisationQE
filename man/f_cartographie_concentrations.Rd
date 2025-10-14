@@ -23,6 +23,7 @@ f_cartographie_concentrations(
   box.padding = 0.35,
   point.padding = 0.3,
   segment.color = "grey50",
+  segment.size = 0.5,
   min.segment.length = 0,
   max.overlaps = 15,
   force_pull = 0.5
@@ -83,6 +84,8 @@ geom_text_repel du package ggrepel}
 
 \item{segment.color}{Couleur du segment liant les points à leurs étiquettes.
 grey50 par défaut. Voir geom_text_repel du package ggrepel}
+
+\item{segment.size}{épaisseur du segment des étiquettes (défaut 0.5)}
 
 \item{min.segment.length}{Longueur mini entre un point et son étiquette
 (par défaut 0) Voir geom_text_repel du package ggrepel}
