@@ -67,7 +67,7 @@ ajoute_coursdeau <- function(shp,
                              table = "ice_vilaine",
                              color = "blue", 
                              size = 0.8) {
-  query <- paste0("SELECT * FROM ", schema, ".", table)
+  query <- paste0("SELECT * FROM \"", schema, "\".\"", table, "\"")
   vilaine <- sf::st_read(con, query = query)
   vilaine <- sf::st_zm(vilaine)
   vilaine <- sf::st_transform(vilaine, sf::st_crs(shp))
