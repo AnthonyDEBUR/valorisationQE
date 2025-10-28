@@ -63,6 +63,10 @@ f_graph_pluviometrie<-function(shp_territoire,
                   pluie[pluie$source!="donnée interpolée",]$source[1],
                   "Météo France")
   
+  sous_titre<-ifelse(nrow(pluie[pluie$source!="donnée interpolée",])>0,
+                     "données Météo-France (open data)",
+                     "interpolation par Eaux & Vilaine des données Météo-France")
+  
   g<-ggplot2::ggplot(pluie,
          ggplot2::aes(date,
              y=precipitation_mm,
@@ -79,7 +83,8 @@ f_graph_pluviometrie<-function(shp_territoire,
     ggplot2::scale_x_date(date_labels="%d/%m/%Y") +
     ggplot2::labs(x="",
          y="mm/jour",
-         title="Précipitations journalières") +
+         title="Précipitations journalières",
+         subtitle = sous_titre) +
     ggplot2::theme_minimal() +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle=45, hjust=1))+
     ggplot2::ylim(0,NA)
