@@ -220,6 +220,10 @@ remplace_somme <- function(code_somme, vecteur_codes_a_sommer) {
       remplace_somme(code_somme = "1221",
                      vecteur_codes_a_sommer = c("8070", "8071"))
 
+     # cas du chloridazone
+    #  Chloridazone (1133) > isochloridazone (7734)
+    data2 <- f_remplace_inclus_dedans("7734", "1133")
+    
     #  S-Métolachlore (2974) est inclus dans Métolachlore total (1221)
     data2 <-
       f_remplace_inclus_dedans(cd_sandre_enantiomere = "2974",
@@ -233,6 +237,9 @@ remplace_somme <- function(code_somme, vecteur_codes_a_sommer) {
     #  Diméthénamide (1678) > Diméthénamide-P (5617)
     data2 <- f_remplace_inclus_dedans("5617", "1678")
 
+    # meptyldinocap (1677) inclus dans dinocap (5619)
+    data2 <- f_remplace_inclus_dedans("1677", "5619")
+    
     # cas du Dichlorprop
     #  Dichlorprop (1169) > Dichlorprop-P (2544)
     data2 <- f_remplace_inclus_dedans("2544", "1169")
@@ -245,6 +252,16 @@ remplace_somme <- function(code_somme, vecteur_codes_a_sommer) {
     #  Fluazifop (6545) > Fluazifop-P (5634)
     data2 <- f_remplace_inclus_dedans("5634", "6545")
 
+       #  fluazifop-butyl total  (1825) > fluazifop-P-butyl (1404)
+    data2 <- f_remplace_inclus_dedans("1404", "1825")
+
+    # cas du cyperméthrine (1140)
+    # La cyperméthrine est constituée de 8 isomères. Les paramètres alpha-cyperméthrine (1812)
+    # et zétacyperméthrine (7521) correspondent respectivement à 2 et 4 de ces isomères
+    data2 <- f_remplace_inclus_dedans("1812", "1140")
+    data2 <- f_remplace_inclus_dedans("7521", "1140")
+    
+    
     # cas du sulfosate, sel du glyphosate (on converti le résultat en glyphosate si ce dernier n'est pas déjà mesuré)
     # Sulfosate (2077) = sel du glyphosate (1506). Pour calculer la concentration en glyphosate à partir du sulfosate, il faut multiplier cette dernière par 0.690
     data2 <- f_remplace_inclus_dedans("2077", "1506", 0.690)
@@ -255,6 +272,10 @@ remplace_somme <- function(code_somme, vecteur_codes_a_sommer) {
     #	Mepiquat chlorure (2089) = sel du mepiquat (1969). Pour calculer la concentration en mepiquat à partir du Mépiquat chlorure, il faut multiplier cette dernière par 0.7631
     data2 <- f_remplace_inclus_dedans("2089", "1969", 0.7631)
 
+       #	chlorate de sodium (5551) = chlorate (1752). Pour calculer la concentration en chlorate à partir du chlorate de sodium, il faut diviser cette dernière par 1.27
+    data2 <- f_remplace_inclus_dedans("5551", "1752", 1/1.27)
+    
+    
     # Somme des Hexachlorocyclohexanes (5537) = Hexachlorocyclohexane alpha (1200)
     # + bêta (1201) + delta (1202) + gamma (1203)
     data2 <-

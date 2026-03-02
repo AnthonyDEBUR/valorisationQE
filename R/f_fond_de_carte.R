@@ -29,6 +29,7 @@
 #'
 #' f_fond_de_carte(triangle_sf, zoom=9)
 f_fond_de_carte <- function(shp, zoom = NULL) {
+  shp <- sf::st_transform(shp, 4326)
   bbox <- sf::st_bbox(sf::st_transform(shp, 4326))
   
   # Charger le fond de carte OpenStreetMap avec maptiles
@@ -38,33 +39,45 @@ f_fond_de_carte <- function(shp, zoom = NULL) {
     sa_map <- maptiles::get_tiles(bbox, zoom = zoom, provider = "OpenStreetMap")
   }
   
-  # Recadrer le raster à l'emprise de shp
-  sa_map_cropped <- raster::crop(sa_map, 
-                                 raster::extent(bbox["xmin"], 
-                                                bbox["xmax"], 
-                                                bbox["ymin"], 
-                                                bbox["ymax"]))
+ 
+
+  # Patch : si maptiles renvoie un raster sans CRS
+  if (is.na(terra::crs(sa_map))) {
+    message("CRS du fond OSM manquant → attribution forcée EPSG:4326")
+    terra::crs(sa_map) <- "EPSG:4326"
+  }
+  
+  # Convertir bbox en extent pour terra
+  ext <- terra::ext(bbox["xmin"], bbox["xmax"], bbox["ymin"], bbox["ymax"])
+  
+  # Recadrer
+  sa_map_cropped <- terra::crop(sa_map, ext)
+
   
   # Convertir le raster en objet ggplot
-  sa_map2_plt <- ggplot2::ggplot() +
+ 
+# ggplot
+  g <- ggplot2::ggplot() +
     ggspatial::layer_spatial(sa_map_cropped) +
-    ggplot2::coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]), 
-                      ylim = c(bbox["ymin"], bbox["ymax"]), 
-                      expand = FALSE)
+    ggplot2::geom_sf(
+      data = shp,
+      fill = NA,
+      color = "black",
+      size = 1
+    ) +
+    ggplot2::coord_sf(
+      xlim = c(bbox["xmin"], bbox["xmax"]),
+      ylim = c(bbox["ymin"], bbox["ymax"]),
+      expand = FALSE
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    )
   
-  shp <- sf::st_transform(shp, 4326)
-  
-  sa_map2_plt <- sa_map2_plt +
-    ggplot2::geom_sf(data = shp, 
-            fill = "transparent", 
-            color = "black", 
-            size = 1, 
-            inherit.aes = FALSE)+
-     theme_minimal() +
-    theme(axis.text = element_blank(), # masque les valeurs des axes
-          axis.ticks = element_blank(), # masque les ticks
-          axis.title = element_blank()) # masque les titres des axes
-  
-  return(sa_map2_plt)
+  return(g)
+
 }
 
