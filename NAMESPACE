@@ -3,6 +3,7 @@
 export("%>%")
 export(ajoute_coursdeau)
 export(analyse_fonctions_pesticides)
+export(arrondi)
 export(calcule_somme_pesticides)
 export(f_cartographie_concentrations)
 export(f_fond_de_carte)

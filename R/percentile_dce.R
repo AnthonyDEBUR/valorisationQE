@@ -52,7 +52,7 @@ percentile_dce <- function(A, type = 0.9, na.rm = TRUE) {
 
   # méthode de Hazen
   n <- length(A)
-  rang <- round((n * type) + 0.5)
+  rang <- arrondi((n * type) + 0.5)
 
   # tri
   B <- sort(A)

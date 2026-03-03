@@ -357,6 +357,21 @@ knitr::include_graphics(system.file("extdata", "graph_coursdeaubv.png", package 
 
   
 
+# Arrondi
+
+```{r examples-arrondi}
+# Exemple : arrondi classique
+arrondi(3.14159, digits = 2)   # 3.14
+arrondi(3.145, digits = 2)     # 3.15
+arrondi(-3.145, digits = 2)    # -3.15
+
+# Exemple avec digits = 0
+arrondi(2.7)   # 3
+arrondi(-2.7)  # -3
+```
+
+
+
 
 # Calcul du percentile au sens de la DCE
 
