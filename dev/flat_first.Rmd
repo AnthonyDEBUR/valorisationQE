@@ -2099,10 +2099,296 @@ test_that("ajoute_coursdeau works", {
   expect_true(inherits(ajoute_coursdeau, "function")) 
 })
 ```
-  
+
+
+# Calcul du percentile au sens de la DCE
+```{r function-percentile_dce}
+#' Calcul du percentile DCE selon la méthode de Hazen
+#'
+#' Cette fonction calcule un percentile DCE (ex : 0.1 ou 0.9) en appliquant
+#' strictement la méthode de Hazen, conformément à l'arrêté ministériel
+#' du 25 janvier 2010 modifié relatif à l’évaluation de l’état des eaux.
+#'
+#' La méthode de Hazen consiste à :
+#' \itemize{
+#'   \item trier les valeurs croissantes,
+#'   \item calculer le rang : \eqn{R = (n * p) + 0.5},
+#'   \item appliquer un arrondi à l'entier le plus proche,
+#'   \item renvoyer la valeur correspondant au rang R.
+#' }
+#'
+#' @param A Vecteur numérique contenant les valeurs mesurées.
+#' @param type Numérique compris entre 0 et 1 (ex : 0.1 ou 0.9).
+#' @param na.rm Logique : TRUE pour ignorer les valeurs manquantes.
+#'
+#' @return Une valeur numérique correspondant au percentile DCE calculé.
+#'
+#' @examples
+#' percentile_dce(c(1, 3, 8, 10, 12), type = 0.9)
+#' percentile_dce(c(4, 6, 9, NA, 3), type = 0.1, na.rm = TRUE)
+#'
+#' @export
+percentile_dce <- function(A, type = 0.9, na.rm = TRUE) {
+
+  # vérification du percentile
+  if (!is.numeric(type) || type < 0 || type > 1) {
+    stop("type doit être un nombre entre 0 et 1")
+  }
+
+  # gestion NA
+  if (!na.rm && any(is.na(A))) {
+    stop(
+      "Le vecteur contient des NA. Utiliser na.rm = TRUE pour les ignorer."
+    )
+  }
+
+  # retrait des NA
+  A <- A[!is.na(A)]
+
+  # sécurité : pas de valeurs
+  if (length(A) == 0) {
+    stop("Aucune valeur disponible pour calculer un percentile DCE.")
+  }
+
+  # méthode de Hazen
+  n <- length(A)
+  rang <- round((n * type) + 0.5)
+
+  # tri
+  B <- sort(A)
+
+  B[rang]
+}
+
+```
+
+
+```{r example-percentile_dce}
+
+```
+
+## Exemple d'utilisation de percentile_dce()
+```{r example-percentile_dce}
+vec <- c(2.1, 5.4, 3.3, 8.9, 7.1, NA)
+percentile_dce(vec, type = 0.9, na.rm = TRUE)
+percentile_dce(vec, type = 0.1, na.rm = TRUE)
+```
+
+## test percentile_dce
+```{r test-percentile_dce}
+test_that("percentile_dce fonctionne selon la méthode de Hazen", {
+
+  # jeu simple
+  x <- c(1, 3, 8, 10, 12)  # n=5
+
+  # 90e percentile Hazen : rang = (5*0.9)+0.5 = 5 -> arrondi = 5
+  expect_equal(percentile_dce(x, type = 0.9), 12)
+
+  # 10e percentile Hazen : rang = (5*0.1)+0.5 = 1 -> arrondi =1
+  expect_equal(percentile_dce(x, type = 0.1), 1)
+
+  # gestion NA
+  x2 <- c(4, 6, 9, NA, 3)
+  expect_equal(percentile_dce(x2, type = 0.9, na.rm = TRUE),
+               percentile_dce(c(4, 6, 9, 3), type = 0.9))
+
+  # erreurs attendues
+  expect_error(percentile_dce(c(1, NA), type = 0.9, na.rm = FALSE))
+  expect_error(percentile_dce(numeric(0), type = 0.9))
+})
+```
+
+# Percentile DCE par station et CdParametre
+
+```{r function-percentile_dce_par_station_multi}
+#' Calcul du percentile DCE (Hazen) par station pour plusieurs paramètres
+#'
+#' Cette fonction applique la méthode de Hazen (via \code{percentile_dce()})
+#' pour calculer un percentile DCE (ex : 0.1 ou 0.9) pour chaque combinaison
+#' station × paramètre, dans une table d'analyses au format SANDRE/ROSEAU.
+#'
+#' Les noms des colonnes utilisées peuvent être paramétrés, avec valeurs par défaut :
+#' \itemize{
+#'   \item station_col = "CdStationMesureEauxSurface"
+#'   \item param_col = "CdParametre"
+#'   \item result_col = "RsAna"
+#' }
+#'
+#' Un contrôle strict des types est effectué :
+#' \itemize{
+#'   \item la colonne station doit être de type caractère ou facteur,
+#'   \item la colonne paramètre doit être caractère ou facteur,
+#'   \item la colonne résultats doit être numérique.
+#' }
+#'
+#' @param analyses Tibble de résultats analytiques.
+#' @param cd_parametres Vecteur de codes paramètres SANDRE à filtrer.
+#' @param type Percentile DCE (0.1 ou 0.9).
+#' @param station_col Nom de la colonne station (défaut : CdStationMesureEauxSurface).
+#' @param param_col Nom de la colonne paramètre (défaut : CdParametre).
+#' @param result_col Nom de la colonne résultat (défaut : RsAna).
+#'
+#' @return Une tibble contenant :
+#'   \itemize{
+#'     \item station_col
+#'     \item param_col
+#'     \item percentile_dce
+#'   }
+#'
+#' @examples
+#' analyses_test <- tibble::tibble(
+#'   CdStationMesureEauxSurface = c("A","A","B","B","B","C"),
+#'   CdParametre = c("1302","1302","1302","8727","8727","1302"),
+#'   RsAna = c(1,5,4,8,12,7)
+#' )
+#'
+#' percentile_dce_par_station_multi(
+#'   analyses_test,
+#'   cd_parametres = c("1302","8727"),
+#'   type = 0.9
+#' )
+#'
+#' @export
+percentile_dce_par_station_multi <- function(
+    analyses,
+    cd_parametres,
+    type = 0.9,
+    station_col = "CdStationMesureEauxSurface",
+    param_col = "CdParametre",
+    result_col = "RsAna"
+) {
+
+  # Vérification présence colonnes
+  required <- c(station_col, param_col, result_col)
+  missing <- setdiff(required, names(analyses))
+  if (length(missing) > 0) {
+    stop("Colonnes manquantes dans 'analyses' : ", paste(missing, collapse = ", "))
+  }
+
+  # Vérification types colonne station
+  if (!is.character(analyses[[station_col]]) &&
+      !is.factor(analyses[[station_col]])) {
+    stop("La colonne station ('", station_col, "') doit être de type caractère ou facteur.")
+  }
+
+  # Vérification types colonne paramètre
+  if (!is.character(analyses[[param_col]]) &&
+      !is.factor(analyses[[param_col]])) {
+    stop("La colonne paramètre ('", param_col, "') doit être de type caractère ou facteur.")
+  }
+
+  # Vérification types colonne résultat
+  if (!is.numeric(analyses[[result_col]])) {
+    stop("La colonne résultat ('", result_col, "') doit être numérique.")
+  }
+
+  # Filtrage des paramètres
+  d <- analyses |>
+    dplyr::filter(.data[[param_col]] %in% cd_parametres) |>
+    dplyr::filter(!is.na(.data[[result_col]]))
+
+  if (nrow(d) == 0) {
+    warning("Aucune donnée pour les paramètres fournis.")
+    return(tibble::tibble(
+      !!station_col := character(),
+      !!param_col := character(),
+      percentile_dce = numeric()
+    ))
+  }
+
+  d |>
+    dplyr::group_by(.data[[station_col]], .data[[param_col]]) |>
+    dplyr::summarise(
+      percentile_dce = percentile_dce(.data[[result_col]], type = type, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+```
+
+```{r examples-percentile_dce_par_station_multi}
+
+
+# Exemple d'utilisation avec colonnes par défaut
+
+analyses_test <- tibble::tibble(
+  CdStationMesureEauxSurface = c("A","A","B","B","B","C"),
+  CdParametre = c("1302","1302","1302","8727","8727","1302"),
+  RsAna = c(1,5,4,8,12,7)
+)
+
+percentile_dce_par_station_multi(
+  analyses_test,
+  cd_parametres = c("1302", "8727"),
+  type = 0.9
+)
+
+# Exemple avec colonnes personnalisées
+
+analyses_custom <- analyses_test |>
+  dplyr::rename(
+    station = CdStationMesureEauxSurface,
+    param = CdParametre,
+    resultat = RsAna
+  )
+
+percentile_dce_par_station_multi(
+  analyses_custom,
+  cd_parametres = c("1302", "8727"),
+  type = 0.1,
+  station_col = "station",
+  param_col = "param",
+  result_col = "resultat"
+)
+
+```
+
+
+```{r tests-percentile_dce_par_station_multi}
+
+test_that("percentile_dce_par_station_multi fonctionne avec Hazen et colonnes paramétrables", {
+
+  analyses_test <- tibble::tibble(
+    station = c("A","A","B","B","B","C"),
+    param = c("1302","1302","1302","8727","8727","1302"),
+    resultat = c(1,5,4,8,12,7)
+  )
+
+  res <- percentile_dce_par_station_multi(
+    analyses_test,
+    cd_parametres = c("1302","8727"),
+    type = 0.9,
+    station_col = "station",
+    param_col = "param",
+    result_col = "resultat"
+  )
+
+  # Vérification Hazen pour B-8727 : valeurs 8, 12 → rang = 2
+  expect_equal(
+    res$percentile_dce[
+      res$station == "B" & res$param == "8727"
+    ],
+    12
+  )
+
+  # Test des types invalides
+  analyses_bad <- analyses_test
+  analyses_bad$resultat <- as.character(analyses_bad$resultat)
+  expect_error(
+    percentile_dce_par_station_multi(analyses_bad,
+      cd_parametres = "1302",
+      result_col = "resultat"
+    )
+  )
+
+})
+
+```
 
 
 
+
+
+##### INFLATE #####
 
 ```{r development-inflate, eval=FALSE}
 # Keep eval=FALSE to avoid infinite loop in case you hit the knit button

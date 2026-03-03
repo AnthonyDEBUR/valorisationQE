@@ -356,10 +356,71 @@ knitr::include_graphics(system.file("extdata", "graph_coursdeaubv.png", package 
 ```
 
   
-  
+
+
+# Calcul du percentile au sens de la DCE
+
+```{r example-percentile_dce}
+
+```
+
+
+## Exemple d'utilisation de percentile_dce()
+```{r example-percentile_dce-1}
+vec <- c(2.1, 5.4, 3.3, 8.9, 7.1, NA)
+percentile_dce(vec, type = 0.9, na.rm = TRUE)
+percentile_dce(vec, type = 0.1, na.rm = TRUE)
+```
+
+
+## test percentile_dce
+
+# Percentile DCE par station et CdParametre
+
+```{r examples-percentile_dce_par_station_multi}
+
+
+# Exemple d'utilisation avec colonnes par défaut
+
+analyses_test <- tibble::tibble(
+  CdStationMesureEauxSurface = c("A","A","B","B","B","C"),
+  CdParametre = c("1302","1302","1302","8727","8727","1302"),
+  RsAna = c(1,5,4,8,12,7)
+)
+
+percentile_dce_par_station_multi(
+  analyses_test,
+  cd_parametres = c("1302", "8727"),
+  type = 0.9
+)
+
+# Exemple avec colonnes personnalisées
+
+analyses_custom <- analyses_test |>
+  dplyr::rename(
+    station = CdStationMesureEauxSurface,
+    param = CdParametre,
+    resultat = RsAna
+  )
+
+percentile_dce_par_station_multi(
+  analyses_custom,
+  cd_parametres = c("1302", "8727"),
+  type = 0.1,
+  station_col = "station",
+  param_col = "param",
+  result_col = "resultat"
+)
+
+```
 
 
 
+
+
+
+
+##### INFLATE #####
 
 
 # Inflate your package
