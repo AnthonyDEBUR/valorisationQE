@@ -32,6 +32,7 @@
 #'     \item station_col
 #'     \item param_col
 #'     \item percentile_dce
+#'     \item N : nombre de données non NA
 #'   }
 #'
 #' @examples
@@ -125,6 +126,7 @@ percentile_dce_par_station_multi <- function(
     return(tibble::tibble(
       !!station_col := character(),
       !!param_col := character(),
+      N= numeric(),
       percentile_dce = numeric()
     ))
   }
@@ -132,6 +134,7 @@ percentile_dce_par_station_multi <- function(
   d |>
     dplyr::group_by(.data[[station_col]], .data[[param_col]]) |>
     dplyr::summarise(
+      N = sum(!is.na(.data[[result_col]])),
       percentile_dce = percentile_dce(.data[[result_col]], type = type, na.rm = TRUE),
       .groups = "drop"
     )

@@ -32,6 +32,7 @@ Une tibble contenant :
 \item station_col
 \item param_col
 \item percentile_dce
+\item N : nombre de données non NA
 }
 }
 \description{
