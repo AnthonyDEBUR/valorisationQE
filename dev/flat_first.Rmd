@@ -2164,17 +2164,11 @@ percentile_dce <- function(A, type = 0.9, na.rm = TRUE) {
 
 
 ```{r example-percentile_dce}
-
-```
-
-## Exemple d'utilisation de percentile_dce()
-```{r example-percentile_dce}
-vec <- c(2.1, 5.4, 3.3, 8.9, 7.1, NA)
+vec <- c(2.1, 5.4, 3.3, 8.9, 7.1, 12.5, 7.0, 8.5, 2, 4.8, 17, 19.2, NA)
 percentile_dce(vec, type = 0.9, na.rm = TRUE)
 percentile_dce(vec, type = 0.1, na.rm = TRUE)
 ```
 
-## test percentile_dce
 ```{r test-percentile_dce}
 test_that("percentile_dce fonctionne selon la méthode de Hazen", {
 

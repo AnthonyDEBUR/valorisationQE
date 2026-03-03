@@ -34,5 +34,7 @@ La méthode de Hazen consiste à :
 percentile_dce(c(1, 3, 8, 10, 12), type = 0.9)
 percentile_dce(c(4, 6, 9, NA, 3), type = 0.1, na.rm = TRUE)
 
-
+vec <- c(2.1, 5.4, 3.3, 8.9, 7.1, 12.5, 7.0, 8.5, 2, 4.8, 17, 19.2, NA)
+percentile_dce(vec, type = 0.9, na.rm = TRUE)
+percentile_dce(vec, type = 0.1, na.rm = TRUE)
 }
